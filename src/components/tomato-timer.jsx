@@ -50,6 +50,7 @@ function formatTimeOfDay(date) {
   return new Intl.DateTimeFormat('zh-TW', {
     hour: '2-digit',
     minute: '2-digit',
+    second: '2-digit',
   }).format(date)
 }
 
@@ -73,6 +74,11 @@ export function TomatoTimer() {
   )
   const [activeCategoryId, setActiveCategoryId] = useState(null)
   const [newCategoryLabel, setNewCategoryLabel] = useState('')
+  const [todos, setTodos] = useState([])
+  const [newTodoTitle, setNewTodoTitle] = useState('')
+  const [newTodoCategoryId, setNewTodoCategoryId] = useState(
+    DEFAULT_CATEGORIES[0]?.id ?? null,
+  )
   const eventId = useRef(0)
   const [eventLog, setEventLog] = useState([])
 
@@ -94,16 +100,23 @@ export function TomatoTimer() {
   )
 
   const logEvent = useCallback((type, detail = {}) => {
+    const timestamp = new Date()
     eventId.current += 1
-    setEventLog((prev) => [
-      {
+    setEventLog((prev) => {
+      const entry = {
         id: eventId.current,
         type,
-        timestamp: new Date(),
+        timestamp,
         ...detail,
-      },
-      ...prev,
-    ])
+      }
+      const next = [entry, ...prev]
+      next.sort((a, b) => {
+        const timeDiff = b.timestamp.getTime() - a.timestamp.getTime()
+        if (timeDiff !== 0) return timeDiff
+        return b.id - a.id
+      })
+      return next
+    })
   }, [])
 
   useEffect(() => {
@@ -111,10 +124,24 @@ export function TomatoTimer() {
       setSelectedCategoryId(null)
       return
     }
-    if (!selectedCategoryId || !categories.some((c) => c.id === selectedCategoryId)) {
+    if (
+      !selectedCategoryId ||
+      !categories.some((c) => c.id === selectedCategoryId)
+    ) {
       setSelectedCategoryId(categories[0].id)
     }
   }, [categories, selectedCategoryId])
+
+  useEffect(() => {
+    if (
+      categories.length === 0 ||
+      (newTodoCategoryId &&
+        categories.some((category) => category.id === newTodoCategoryId))
+    ) {
+      return
+    }
+    setNewTodoCategoryId(selectedCategoryId ?? categories[0]?.id ?? null)
+  }, [categories, newTodoCategoryId, selectedCategoryId])
 
   useEffect(() => {
     if (!isRunning || secondsLeft <= 0) {
@@ -286,6 +313,52 @@ export function TomatoTimer() {
     setActiveCategoryId((current) => (current === id ? null : current))
   }
 
+  const handleAddTodo = () => {
+    const trimmed = newTodoTitle.trim()
+    if (!trimmed || !newTodoCategoryId) return
+
+    const categorySnapshot = getCategorySnapshot(newTodoCategoryId)
+    const todo = {
+      id: `todo-${Date.now()}`,
+      title: trimmed,
+      categoryId: newTodoCategoryId,
+      completed: false,
+      createdAt: new Date(),
+      completedAt: null,
+    }
+    setTodos((prev) => [todo, ...prev])
+    setNewTodoTitle('')
+    logEvent('todo-add', {
+      todoTitle: trimmed,
+      ...categorySnapshot,
+    })
+  }
+
+  const handleToggleTodo = (id) => {
+    const target = todos.find((todo) => todo.id === id)
+    if (!target) return
+
+    const nextCompleted = !target.completed
+    const categorySnapshot = getCategorySnapshot(target.categoryId)
+
+    logEvent(nextCompleted ? 'todo-complete' : 'todo-reopen', {
+      todoTitle: target.title,
+      ...categorySnapshot,
+    })
+
+    setTodos((prev) =>
+      prev.map((todo) =>
+        todo.id === id
+          ? {
+              ...todo,
+              completed: nextCompleted,
+              completedAt: nextCompleted ? new Date() : null,
+            }
+          : todo,
+      ),
+    )
+  }
+
   const sessionStatus = (() => {
     if (isRunning) return '進行中'
     if (secondsLeft === 0 && (sessionStart || sessionEnd)) return '已完成'
@@ -308,14 +381,21 @@ export function TomatoTimer() {
   const startButtonLabel = isRunning ? '暫停' : sessionStart ? '繼續' : '開始'
   const isStartDisabled =
     (!isRunning && (!selectedCategoryId || secondsLeft <= 0)) || false
+  const pendingTodos = todos.filter((todo) => !todo.completed)
+  const completedTodos = todos
+    .filter((todo) => todo.completed)
+    .sort((a, b) => (b.completedAt?.getTime() ?? 0) - (a.completedAt?.getTime() ?? 0))
 
   return (
     <Stack
       direction={{ base: 'column', lg: 'row' }}
       gap='6'
       width='full'
+      height='100%'
+      maxH='100%'
       align='stretch'
       justify='center'
+      minH='0'
     >
       <Box
         borderWidth='1px'
@@ -324,6 +404,10 @@ export function TomatoTimer() {
         width='full'
         background='bg.surface'
         boxShadow='sm'
+        flex='1'
+        maxH='100%'
+        minH='0'
+        overflowY='auto'
       >
         <Stack gap='6'>
           <Stack gap='2' align='center'>
@@ -485,38 +569,40 @@ export function TomatoTimer() {
                   <Accordion.ItemContent px='4' pb='4'>
                     <Stack gap='3'>
                       {categories.length > 0 ? (
-                        <Wrap justify='center' spacing='2'>
-                          {categories.map((category) => (
-                            <WrapItem key={category.id}>
-                              <Tag.Root
-                                variant={
-                                  category.id === selectedCategoryId
-                                    ? 'solid'
-                                    : 'subtle'
-                                }
-                                colorPalette='teal'
-                                cursor={isRunning ? 'not-allowed' : 'pointer'}
-                                opacity={isRunning ? 0.7 : 1}
-                                onClick={() => {
-                                  if (!isRunning) {
-                                    setSelectedCategoryId(category.id)
+                        <Box maxHeight='32' overflowY='auto' pr='1'>
+                          <Wrap justify='center' spacing='2'>
+                            {categories.map((category) => (
+                              <WrapItem key={category.id}>
+                                <Tag.Root
+                                  variant={
+                                    category.id === selectedCategoryId
+                                      ? 'solid'
+                                      : 'subtle'
                                   }
-                                }}
-                              >
-                                <Tag.Label>{category.label}</Tag.Label>
-                                <Tag.EndElement>
-                                  <Tag.CloseTrigger
-                                    disabled={isRunning}
-                                    onClick={(event) => {
-                                      event.stopPropagation()
-                                      handleRemoveCategory(category.id)
-                                    }}
-                                  />
-                                </Tag.EndElement>
-                              </Tag.Root>
-                            </WrapItem>
-                          ))}
-                        </Wrap>
+                                  colorPalette='teal'
+                                  cursor={isRunning ? 'not-allowed' : 'pointer'}
+                                  opacity={isRunning ? 0.7 : 1}
+                                  onClick={() => {
+                                    if (!isRunning) {
+                                      setSelectedCategoryId(category.id)
+                                    }
+                                  }}
+                                >
+                                  <Tag.Label>{category.label}</Tag.Label>
+                                  <Tag.EndElement>
+                                    <Tag.CloseTrigger
+                                      disabled={isRunning}
+                                      onClick={(event) => {
+                                        event.stopPropagation()
+                                        handleRemoveCategory(category.id)
+                                      }}
+                                    />
+                                  </Tag.EndElement>
+                                </Tag.Root>
+                              </WrapItem>
+                            ))}
+                          </Wrap>
+                        </Box>
                       ) : (
                         <Text fontSize='sm' color='fg.muted' textAlign='center'>
                           請先新增一個工作類別。
@@ -551,6 +637,112 @@ export function TomatoTimer() {
                   </Accordion.ItemContent>
                 </Box>
               </Accordion.Item>
+              <Accordion.Item value='todo'>
+                <Box borderWidth='1px' borderRadius='lg' overflow='hidden'>
+                  <Accordion.ItemTrigger px='4' py='3'>
+                    <HStack justify='space-between' flex='1'>
+                      <Text fontSize='sm' fontWeight='medium'>
+                        TODO 清單
+                      </Text>
+                      <Accordion.ItemIndicator />
+                    </HStack>
+                  </Accordion.ItemTrigger>
+                  <Accordion.ItemContent px='4' pb='4'>
+                    <Stack gap='3'>
+                      <Stack gap='2'>
+                        <Input
+                          size='sm'
+                          placeholder='新增待辦事項'
+                          value={newTodoTitle}
+                          onChange={(event) => setNewTodoTitle(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault()
+                              handleAddTodo()
+                            }
+                          }}
+                        />
+                        {categories.length > 0 ? (
+                          <Box maxHeight='32' overflowY='auto' pr='1'>
+                            <Wrap justify='center' spacing='2'>
+                              {categories.map((category) => (
+                                <WrapItem key={category.id}>
+                                  <Tag.Root
+                                    variant={
+                                      category.id === newTodoCategoryId
+                                        ? 'solid'
+                                        : 'subtle'
+                                    }
+                                    colorPalette='purple'
+                                    cursor='pointer'
+                                    onClick={() => setNewTodoCategoryId(category.id)}
+                                  >
+                                    <Tag.Label>{category.label}</Tag.Label>
+                                  </Tag.Root>
+                                </WrapItem>
+                              ))}
+                            </Wrap>
+                          </Box>
+                        ) : (
+                          <Text fontSize='sm' color='fg.muted' textAlign='center'>
+                            請先建立工作類別以指派待辦。
+                          </Text>
+                        )}
+                        <Button
+                          size='sm'
+                          variant='outline'
+                          onClick={handleAddTodo}
+                          isDisabled={!newTodoTitle.trim() || !newTodoCategoryId}
+                        >
+                          新增待辦
+                        </Button>
+                      </Stack>
+                      <Stack gap='2'>
+                        {pendingTodos.length === 0 ? (
+                          <Text fontSize='sm' color='fg.muted' textAlign='center'>
+                            尚未新增待辦事項。
+                          </Text>
+                        ) : (
+                          pendingTodos.map((todo) => {
+                            const category = getCategorySnapshot(todo.categoryId)
+                            return (
+                              <HStack
+                                key={todo.id}
+                                justify='space-between'
+                                borderWidth='1px'
+                                borderRadius='md'
+                                px='3'
+                                py='2'
+                              >
+                                <Stack gap='0'>
+                                  <Text
+                                    fontSize='sm'
+                                    textDecoration='none'
+                                    color='fg'
+                                  >
+                                    {todo.title}
+                                  </Text>
+                                  <Text fontSize='xs' color='fg.muted'>
+                                    類別：{category.categoryLabel}
+                                  </Text>
+                                </Stack>
+                                <Button
+                                  size='xs'
+                                  variant='solid'
+                                  colorScheme='teal'
+                                  onClick={() => handleToggleTodo(todo.id)}
+                                >
+                                  完成
+                                </Button>
+                              </HStack>
+                            )
+                          })
+                        )}
+                      </Stack>
+                    </Stack>
+                  </Accordion.ItemContent>
+                </Box>
+              </Accordion.Item>
             </Accordion.Root>
           </Stack>
 
@@ -568,6 +760,10 @@ export function TomatoTimer() {
         maxW={{ base: 'full', lg: 'sm' }}
         background='bg.subtle'
         boxShadow='sm'
+        flex={{ base: 'none', lg: '1' }}
+        maxH='100%'
+        minH='0'
+        overflowY='auto'
       >
         <Stack gap='6'>
           <Stack align='center' gap='3'>
@@ -636,6 +832,21 @@ export function TomatoTimer() {
                       icon: LuCheck,
                       color: 'purple',
                     },
+                    'todo-add': {
+                      label: '新增待辦',
+                      icon: LuClipboardList,
+                      color: 'blue',
+                    },
+                    'todo-complete': {
+                      label: '完成待辦',
+                      icon: LuCheck,
+                      color: 'purple',
+                    },
+                    'todo-reopen': {
+                      label: '還原待辦',
+                      icon: LuRotateCcw,
+                      color: 'gray',
+                    },
                   }
                   const meta =
                     descriptors[event.type] ?? {
@@ -662,6 +873,12 @@ export function TomatoTimer() {
                     }
                   } else if (event.type === 'complete') {
                     detail = '番茄鐘完成'
+                  } else if (event.type === 'todo-add') {
+                    detail = `新增 ${event.todoTitle}`
+                  } else if (event.type === 'todo-complete') {
+                    detail = `完成 ${event.todoTitle}`
+                  } else if (event.type === 'todo-reopen') {
+                    detail = `重新開啟 ${event.todoTitle}`
                   }
 
                   return (
@@ -695,6 +912,97 @@ export function TomatoTimer() {
                 })
               )}
             </Stack>
+          </Stack>
+          <Stack gap='3'>
+            <Text fontSize='sm' color='fg.muted'>
+              待辦清單
+            </Text>
+            {pendingTodos.length === 0 ? (
+              <Text fontSize='sm' color='fg.muted'>
+                目前沒有待辦事項。
+              </Text>
+            ) : (
+              <Stack gap='2' maxHeight='40' overflowY='auto' pr='1'>
+                {pendingTodos.map((todo) => {
+                  const category = getCategorySnapshot(todo.categoryId)
+                  return (
+                    <HStack
+                      key={todo.id}
+                      justify='space-between'
+                      borderWidth='1px'
+                      borderRadius='md'
+                      px='3'
+                      py='2'
+                    >
+                      <Stack gap='0'>
+                        <Text fontSize='sm'>{todo.title}</Text>
+                        <Text fontSize='xs' color='fg.muted'>
+                          類別：{category.categoryLabel}
+                        </Text>
+                      </Stack>
+                      <Button
+                        size='xs'
+                        variant='solid'
+                        colorScheme='teal'
+                        onClick={() => handleToggleTodo(todo.id)}
+                      >
+                        完成
+                      </Button>
+                    </HStack>
+                  )
+                })}
+              </Stack>
+            )}
+          </Stack>
+          <Stack gap='3'>
+            <Text fontSize='sm' color='fg.muted'>
+              待辦完成紀錄
+            </Text>
+            {completedTodos.length === 0 ? (
+              <Text fontSize='sm' color='fg.muted'>
+                還沒有完成的待辦。
+              </Text>
+            ) : (
+              <Stack gap='2' maxHeight='40' overflowY='auto' pr='1'>
+                {completedTodos.map((todo) => {
+                  const category = getCategorySnapshot(todo.categoryId)
+                  return (
+                    <HStack
+                      key={todo.id}
+                      justify='space-between'
+                      borderWidth='1px'
+                      borderRadius='md'
+                      px='3'
+                      py='2'
+                      bg='bg.subtle'
+                    >
+                      <Stack gap='0'>
+                        <Text fontSize='sm' color='fg'>
+                          {todo.title}
+                        </Text>
+                        <Text fontSize='xs' color='fg.muted'>
+                          類別：{category.categoryLabel}
+                        </Text>
+                        <Text fontSize='xs' color='fg.muted'>
+                          完成於：
+                          {todo.completedAt
+                            ? formatTimeOfDay(todo.completedAt)
+                            : '—'}
+                        </Text>
+                      </Stack>
+                      <Button
+                        size='xs'
+                        variant='outline'
+                        colorScheme='gray'
+                        onClick={() => handleToggleTodo(todo.id)}
+                      >
+                        還原
+                      </Button>
+                    </HStack>
+                  )
+                })}
+              </Stack>
+            )}
           </Stack>
           <Text fontSize='sm' color='fg.muted'>
             點擊開始後會自動記錄預計完成時間；完成後可參考這裡做工作紀錄。

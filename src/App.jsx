@@ -13,8 +13,8 @@ import { TomatoTimer } from './components/tomato-timer.jsx'
 export default function App() {
   return (
     <>
-      <Container py='12'>
-        <VStack gap='8'>
+      <Container height='100vh' py='6' overflow='hidden'>
+        <VStack gap='6' height='100%' maxH='100%' align='stretch'>
           <Box alignSelf='flex-end'>
             <ColorModeButton />
           </Box>
@@ -24,7 +24,9 @@ export default function App() {
               已經使用 Vite + Chakra UI 初始化。開始把你的番茄鐘點子搬進來吧！
             </Text>
           </Stack>
-          <TomatoTimer />
+          <Box flex='1' minH='0'>
+            <TomatoTimer />
+          </Box>
         </VStack>
       </Container>
       <Toaster />
