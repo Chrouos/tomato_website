@@ -1,17 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  Accordion,
   Badge,
   Box,
   Button,
+  ButtonGroup,
   HStack,
   Heading,
   Icon,
+  Input,
   NumberInput,
   Stack,
+  Tag,
   Text,
+  Wrap,
+  WrapItem,
 } from '@chakra-ui/react'
 import {
   LuCalendar,
+  LuClipboardList,
   LuClock,
   LuCheck,
   LuMinus,
@@ -23,6 +30,12 @@ import {
 
 const ONE_MINUTE = 60
 const INITIAL_MINUTES = 25
+const DEFAULT_CATEGORIES = [
+  { id: 'deep-work', label: '深度工作' },
+  { id: 'learning', label: '學習' },
+  { id: 'meeting', label: '會議/討論' },
+  { id: 'break', label: '安排休息' },
+]
 
 function formatTime(totalSeconds) {
   const minutes = Math.floor(totalSeconds / 60)
@@ -54,8 +67,31 @@ export function TomatoTimer() {
   )
   const [sessionStart, setSessionStart] = useState(null)
   const [sessionEnd, setSessionEnd] = useState(null)
+  const [categories, setCategories] = useState(DEFAULT_CATEGORIES)
+  const [selectedCategoryId, setSelectedCategoryId] = useState(
+    DEFAULT_CATEGORIES[0]?.id ?? null,
+  )
+  const [activeCategoryId, setActiveCategoryId] = useState(null)
+  const [newCategoryLabel, setNewCategoryLabel] = useState('')
   const eventId = useRef(0)
   const [eventLog, setEventLog] = useState([])
+
+  const getCategorySnapshot = useCallback(
+    (categoryId) => {
+      if (!categoryId) {
+        return {
+          categoryId: null,
+          categoryLabel: '未指定',
+        }
+      }
+      const category = categories.find((item) => item.id === categoryId)
+      return {
+        categoryId,
+        categoryLabel: category?.label ?? '未指定',
+      }
+    },
+    [categories],
+  )
 
   const logEvent = useCallback((type, detail = {}) => {
     eventId.current += 1
@@ -71,6 +107,16 @@ export function TomatoTimer() {
   }, [])
 
   useEffect(() => {
+    if (categories.length === 0) {
+      setSelectedCategoryId(null)
+      return
+    }
+    if (!selectedCategoryId || !categories.some((c) => c.id === selectedCategoryId)) {
+      setSelectedCategoryId(categories[0].id)
+    }
+  }, [categories, selectedCategoryId])
+
+  useEffect(() => {
     if (!isRunning || secondsLeft <= 0) {
       return
     }
@@ -80,7 +126,11 @@ export function TomatoTimer() {
         if (prev <= 1) {
           setIsRunning(false)
           setSessionEnd(new Date())
-          logEvent('complete', { totalSeconds: initialSeconds })
+          const categorySnapshot = getCategorySnapshot(activeCategoryId)
+          logEvent('complete', {
+            totalSeconds: initialSeconds,
+            ...categorySnapshot,
+          })
           return 0
         }
         return prev - 1
@@ -88,7 +138,14 @@ export function TomatoTimer() {
     }, 1000)
 
     return () => clearInterval(interval)
-  }, [isRunning, secondsLeft, initialSeconds, logEvent])
+  }, [
+    isRunning,
+    secondsLeft,
+    initialSeconds,
+    activeCategoryId,
+    getCategorySnapshot,
+    logEvent,
+  ])
 
   const timeLabel = useMemo(() => formatTime(secondsLeft), [secondsLeft])
 
@@ -109,6 +166,7 @@ export function TomatoTimer() {
       setInitialSeconds(next)
       setSessionStart(null)
       setSessionEnd(null)
+      setActiveCategoryId(null)
       return next
     })
   }
@@ -118,7 +176,14 @@ export function TomatoTimer() {
     setIsRunning(false)
     setSessionStart(null)
     setSessionEnd(null)
-    logEvent('reset', { totalSeconds: initialSeconds })
+    const categorySnapshot = getCategorySnapshot(
+      selectedCategoryId ?? activeCategoryId,
+    )
+    setActiveCategoryId(null)
+    logEvent('reset', {
+      totalSeconds: initialSeconds,
+      ...categorySnapshot,
+    })
   }
 
   const commitInputValues = (minutes, seconds) => {
@@ -134,6 +199,7 @@ export function TomatoTimer() {
     setSecondsLeft(totalSeconds)
     setSessionStart(null)
     setSessionEnd(null)
+    setActiveCategoryId(null)
   }
 
   const handleMinutesChange = ({ valueAsNumber }) => {
@@ -156,7 +222,11 @@ export function TomatoTimer() {
     if (isRunning) {
       setIsRunning(false)
       setSessionEnd(null)
-      logEvent('pause', { remainingSeconds: secondsLeft })
+      const categorySnapshot = getCategorySnapshot(activeCategoryId)
+      logEvent('pause', {
+        remainingSeconds: secondsLeft,
+        ...categorySnapshot,
+      })
       return
     }
 
@@ -169,12 +239,51 @@ export function TomatoTimer() {
     if (!hasStartedBefore) {
       setSessionStart(now)
     }
+
+    const baseCategoryId = hasStartedBefore
+      ? activeCategoryId ?? selectedCategoryId
+      : selectedCategoryId
+
+    if (!baseCategoryId) {
+      return
+    }
+
+    if (!hasStartedBefore || !activeCategoryId) {
+      setActiveCategoryId(baseCategoryId)
+    }
+
     setSessionEnd(new Date(now.getTime() + secondsLeft * 1000))
 
     const eventType =
       hasStartedBefore && secondsLeft !== initialSeconds ? 'resume' : 'start'
-    logEvent(eventType, { remainingSeconds: secondsLeft })
+    const categorySnapshot = getCategorySnapshot(baseCategoryId)
+    logEvent(eventType, {
+      remainingSeconds: secondsLeft,
+      ...categorySnapshot,
+    })
     setIsRunning(true)
+  }
+
+  const handleAddCategory = () => {
+    const trimmed = newCategoryLabel.trim()
+    if (!trimmed) return
+
+    const slug = trimmed
+      .toLowerCase()
+      .replace(/[^a-z0-9\u4e00-\u9fa5\s-]/gi, '')
+      .replace(/\s+/g, '-')
+    const id = `${slug || 'category'}-${Date.now()}`
+    const nextCategory = { id, label: trimmed }
+    setCategories((prev) => [...prev, nextCategory])
+    setSelectedCategoryId(id)
+    setNewCategoryLabel('')
+  }
+
+  const handleRemoveCategory = (id) => {
+    if (isRunning) return
+    setCategories((prev) => prev.filter((category) => category.id !== id))
+    setSelectedCategoryId((current) => (current === id ? null : current))
+    setActiveCategoryId((current) => (current === id ? null : current))
   }
 
   const sessionStatus = (() => {
@@ -193,6 +302,12 @@ export function TomatoTimer() {
     ? formatTimeOfDay(sessionStart)
     : '--:--'
   const sessionEndLabel = sessionEnd ? formatTimeOfDay(sessionEnd) : '--:--'
+  const activeCategoryLabel = getCategorySnapshot(
+    activeCategoryId ?? selectedCategoryId,
+  ).categoryLabel
+  const startButtonLabel = isRunning ? '暫停' : sessionStart ? '繼續' : '開始'
+  const isStartDisabled =
+    (!isRunning && (!selectedCategoryId || secondsLeft <= 0)) || false
 
   return (
     <Stack
@@ -216,112 +331,227 @@ export function TomatoTimer() {
             <Text color='fg.muted'>保持專注，善用番茄鐘節奏。</Text>
           </Stack>
 
-          <Stack gap='4' align='center'>
-            <Stack align='center' gap='3'>
+          <Stack gap='6' align='center'>
+            <Stack align='center' gap='2'>
               <Text fontSize='7xl' fontWeight='semibold'>
                 {timeLabel}
               </Text>
-              <Stack width='full' maxW='64' gap='3'>
-                <Text fontSize='sm' textAlign='center' color='fg.muted'>
-                  手動設定時間
+              <Stack align='center' gap='1'>
+                <Text fontSize='xs' color='fg.muted'>
+                  目前類別
                 </Text>
-                <HStack gap='3' justify='center'>
-                  <Stack align='center' gap='1'>
-                    <Text fontSize='xs' color='fg.muted'>
-                      分鐘
-                    </Text>
-                    <NumberInput.Root
-                      width='24'
-                      value={String(inputMinutes)}
-                      onValueChange={handleMinutesChange}
-                      min={0}
-                      max={999}
-                      keepWithinRange={false}
-                      clampValueOnBlur={false}
-                      disabled={isRunning}
-                    >
-                      <NumberInput.Control />
-                      <NumberInput.Input
-                        textAlign='center'
-                        onBlur={handleInputsCommit}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') {
-                            event.preventDefault()
-                            event.currentTarget.blur()
-                          }
-                        }}
-                        inputMode='numeric'
-                        pattern='[0-9]*'
-                      />
-                    </NumberInput.Root>
-                  </Stack>
-                  <Text fontSize='lg' fontWeight='medium' color='fg.muted'>
-                    :
-                  </Text>
-                  <Stack align='center' gap='1'>
-                    <Text fontSize='xs' color='fg.muted'>
-                      秒
-                    </Text>
-                    <NumberInput.Root
-                      width='24'
-                      value={String(inputSeconds)}
-                      onValueChange={handleSecondsChange}
-                      min={0}
-                      max={59}
-                      keepWithinRange
-                      clampValueOnBlur={false}
-                      disabled={isRunning}
-                    >
-                      <NumberInput.Control />
-                      <NumberInput.Input
-                        textAlign='center'
-                        onBlur={handleInputsCommit}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') {
-                            event.preventDefault()
-                            event.currentTarget.blur()
-                          }
-                        }}
-                        inputMode='numeric'
-                        pattern='[0-9]*'
-                      />
-                    </NumberInput.Root>
-                  </Stack>
-                </HStack>
+                <Badge colorPalette={
+                  activeCategoryId ?? selectedCategoryId ? 'teal' : 'gray'
+                }>
+                  {activeCategoryLabel}
+                </Badge>
               </Stack>
             </Stack>
-            <HStack gap='2'>
-              <Button
-                leftIcon={<LuMinus />}
-                onClick={() => handleAdjust(-1)}
-                disabled={isRunning || secondsLeft <= 0}
-                variant='outline'
-                size='sm'
-              >
-                -1 分鐘
-              </Button>
-              <Button
-                rightIcon={<LuPlus />}
-                onClick={() => handleAdjust(1)}
-                variant='outline'
-                size='sm'
-                disabled={isRunning}
-              >
-                +1 分鐘
-              </Button>
-            </HStack>
-            <HStack gap='3'>
+            <ButtonGroup spacing='3'>
               <Button
                 onClick={handleToggle}
                 colorScheme={isRunning ? 'orange' : 'green'}
-                width='32'
+                minW='32'
+                isDisabled={isStartDisabled}
               >
-                {isRunning ? '暫停' : '開始'}
+                {startButtonLabel}
               </Button>
               <Button variant='outline' onClick={handleReset}>
                 重置
               </Button>
-            </HStack>
+            </ButtonGroup>
+            <Accordion.Root width='full' maxW='64' collapsible>
+              <Accordion.Item value='time'>
+                <Box borderWidth='1px' borderRadius='lg' overflow='hidden'>
+                  <Accordion.ItemTrigger px='4' py='3'>
+                    <HStack justify='space-between' flex='1'>
+                      <Text fontSize='sm' fontWeight='medium'>
+                        手動設定時間
+                      </Text>
+                      <Accordion.ItemIndicator />
+                    </HStack>
+                  </Accordion.ItemTrigger>
+                  <Accordion.ItemContent px='4' pb='4'>
+                    <Stack gap='4'>
+                      <HStack gap='3' justify='center'>
+                        <Stack align='center' gap='1'>
+                          <Text fontSize='xs' color='fg.muted'>
+                            分鐘
+                          </Text>
+                          <NumberInput.Root
+                            width='24'
+                            value={String(inputMinutes)}
+                            onValueChange={handleMinutesChange}
+                            min={0}
+                            max={999}
+                            keepWithinRange={false}
+                            clampValueOnBlur={false}
+                            disabled={isRunning}
+                          >
+                            <NumberInput.Control />
+                            <NumberInput.Input
+                              textAlign='center'
+                              onBlur={handleInputsCommit}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  event.preventDefault()
+                                  event.currentTarget.blur()
+                                }
+                              }}
+                              inputMode='numeric'
+                              pattern='[0-9]*'
+                            />
+                          </NumberInput.Root>
+                        </Stack>
+                        <Text fontSize='lg' fontWeight='medium' color='fg.muted'>
+                          :
+                        </Text>
+                        <Stack align='center' gap='1'>
+                          <Text fontSize='xs' color='fg.muted'>
+                            秒
+                          </Text>
+                          <NumberInput.Root
+                            width='24'
+                            value={String(inputSeconds)}
+                            onValueChange={handleSecondsChange}
+                            min={0}
+                            max={59}
+                            keepWithinRange
+                            clampValueOnBlur={false}
+                            disabled={isRunning}
+                          >
+                            <NumberInput.Control />
+                            <NumberInput.Input
+                              textAlign='center'
+                              onBlur={handleInputsCommit}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  event.preventDefault()
+                                  event.currentTarget.blur()
+                                }
+                              }}
+                              inputMode='numeric'
+                              pattern='[0-9]*'
+                            />
+                          </NumberInput.Root>
+                        </Stack>
+                      </HStack>
+                      <HStack gap='2' justify='center'>
+                        <Button
+                          leftIcon={<LuMinus />}
+                          onClick={() => handleAdjust(-1)}
+                          isDisabled={isRunning || secondsLeft <= 0}
+                          variant='outline'
+                          size='sm'
+                          _disabled={{
+                            opacity: 1,
+                            bg: 'gray.200',
+                            color: 'fg.muted',
+                            borderColor: 'gray.300',
+                          }}
+                        >
+                          -1 分鐘
+                        </Button>
+                        <Button
+                          rightIcon={<LuPlus />}
+                          onClick={() => handleAdjust(1)}
+                          variant='outline'
+                          size='sm'
+                          isDisabled={isRunning}
+                          _disabled={{
+                            opacity: 1,
+                            bg: 'gray.200',
+                            color: 'fg.muted',
+                            borderColor: 'gray.300',
+                          }}
+                        >
+                          +1 分鐘
+                        </Button>
+                      </HStack>
+                    </Stack>
+                  </Accordion.ItemContent>
+                </Box>
+              </Accordion.Item>
+              <Accordion.Item value='category'>
+                <Box borderWidth='1px' borderRadius='lg' overflow='hidden'>
+                  <Accordion.ItemTrigger px='4' py='3'>
+                    <HStack justify='space-between' flex='1'>
+                      <Text fontSize='sm' fontWeight='medium'>
+                        管理工作類別
+                      </Text>
+                      <Accordion.ItemIndicator />
+                    </HStack>
+                  </Accordion.ItemTrigger>
+                  <Accordion.ItemContent px='4' pb='4'>
+                    <Stack gap='3'>
+                      {categories.length > 0 ? (
+                        <Wrap justify='center' spacing='2'>
+                          {categories.map((category) => (
+                            <WrapItem key={category.id}>
+                              <Tag.Root
+                                variant={
+                                  category.id === selectedCategoryId
+                                    ? 'solid'
+                                    : 'subtle'
+                                }
+                                colorPalette='teal'
+                                cursor={isRunning ? 'not-allowed' : 'pointer'}
+                                opacity={isRunning ? 0.7 : 1}
+                                onClick={() => {
+                                  if (!isRunning) {
+                                    setSelectedCategoryId(category.id)
+                                  }
+                                }}
+                              >
+                                <Tag.Label>{category.label}</Tag.Label>
+                                <Tag.EndElement>
+                                  <Tag.CloseTrigger
+                                    disabled={isRunning}
+                                    onClick={(event) => {
+                                      event.stopPropagation()
+                                      handleRemoveCategory(category.id)
+                                    }}
+                                  />
+                                </Tag.EndElement>
+                              </Tag.Root>
+                            </WrapItem>
+                          ))}
+                        </Wrap>
+                      ) : (
+                        <Text fontSize='sm' color='fg.muted' textAlign='center'>
+                          請先新增一個工作類別。
+                        </Text>
+                      )}
+                      <HStack>
+                        <Input
+                          size='sm'
+                          placeholder='新增類別'
+                          value={newCategoryLabel}
+                          onChange={(event) => setNewCategoryLabel(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault()
+                              handleAddCategory()
+                            }
+                          }}
+                          isDisabled={isRunning}
+                        />
+                        <Button
+                          size='sm'
+                          variant='outline'
+                          onClick={handleAddCategory}
+                          isDisabled={
+                            isRunning || newCategoryLabel.trim() === ''
+                          }
+                        >
+                          新增
+                        </Button>
+                      </HStack>
+                    </Stack>
+                  </Accordion.ItemContent>
+                </Box>
+              </Accordion.Item>
+            </Accordion.Root>
           </Stack>
 
           <Text fontSize='sm' color='fg.muted' textAlign='center'>
@@ -373,6 +603,15 @@ export function TomatoTimer() {
                 <Text fontWeight='medium'>
                   {sessionStartLabel} → {sessionEndLabel}
                 </Text>
+              </Stack>
+            </HStack>
+            <HStack gap='3' align='center'>
+              <Icon as={LuClipboardList} boxSize='6' color='fg.muted' />
+              <Stack gap='0'>
+                <Text fontSize='sm' color='fg.muted'>
+                  工作類別
+                </Text>
+                <Text fontWeight='medium'>{activeCategoryLabel}</Text>
               </Stack>
             </HStack>
           </Stack>
@@ -443,6 +682,11 @@ export function TomatoTimer() {
                         {detail && (
                           <Text fontSize='xs' color='fg.muted'>
                             {detail}
+                          </Text>
+                        )}
+                        {event.categoryLabel && (
+                          <Text fontSize='xs' color='fg.muted'>
+                            類別：{event.categoryLabel}
                           </Text>
                         )}
                       </Stack>
