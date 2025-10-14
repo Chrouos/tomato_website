@@ -10,3 +10,6 @@ yarn.lock
 .eslintcache
 .cache
 *.tsbuildinfo
+server/data/init/*.sql
+server/data/init/*.sql.*
+server/data/init/*.psql
