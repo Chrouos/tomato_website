@@ -958,6 +958,121 @@ export function TomatoTimer() {
           </Stack>
           <Stack gap='3'>
             <Text fontSize='sm' color='fg.muted'>
+              待辦清單
+            </Text>
+            {pendingTodos.length === 0 ? (
+              <Text fontSize='sm' color='fg.muted'>
+                目前沒有待辦事項。
+              </Text>
+            ) : (
+              <Stack gap='2' maxHeight='40' overflowY='auto' pr='1'>
+                {pendingTodos.map((todo) => {
+                  const category = getCategorySnapshot(todo.categoryId)
+                  return (
+                    <HStack
+                      key={todo.id}
+                      justify='space-between'
+                      borderWidth='1px'
+                      borderRadius='md'
+                      px='3'
+                      py='2'
+                    >
+                      <Stack gap='0'>
+                        <Text fontSize='sm'>{todo.title}</Text>
+                        <Text fontSize='xs' color='fg.muted'>
+                          類別：{category.categoryLabel}
+                        </Text>
+                      </Stack>
+                      <Button
+                        size='xs'
+                        variant='solid'
+                        colorScheme='teal'
+                        onClick={() => handleToggleTodo(todo.id)}
+                      >
+                        完成
+                      </Button>
+                    </HStack>
+                  )
+                })}
+              </Stack>
+            )}
+          </Stack>
+          <Stack gap='3'>
+            <Text fontSize='sm' color='fg.muted'>
+              待辦完成紀錄
+            </Text>
+            {completedTodos.length === 0 ? (
+              <Text fontSize='sm' color='fg.muted'>
+                還沒有完成的待辦。
+              </Text>
+            ) : (
+              <Stack gap='2' maxHeight='40' overflowY='auto' pr='1'>
+                {completedTodos.map((todo) => {
+                  const category = getCategorySnapshot(todo.categoryId)
+                  return (
+                    <HStack
+                      key={todo.id}
+                      justify='space-between'
+                      borderWidth='1px'
+                      borderRadius='md'
+                      px='3'
+                      py='2'
+                      bg='bg.subtle'
+                    >
+                      <Stack gap='0'>
+                        <Text fontSize='sm' color='fg'>
+                          {todo.title}
+                        </Text>
+                        <Text fontSize='xs' color='fg.muted'>
+                          類別：{category.categoryLabel}
+                        </Text>
+                        <Text fontSize='xs' color='fg.muted'>
+                          完成於：
+                          {todo.completedAt
+                            ? formatTimeOfDay(todo.completedAt)
+                            : '—'}
+                        </Text>
+                      </Stack>
+                      <Button
+                        size='xs'
+                        variant='outline'
+                        colorScheme='gray'
+                        onClick={() => handleToggleTodo(todo.id)}
+                      >
+                        還原
+                      </Button>
+                    </HStack>
+                  )
+                })}
+              </Stack>
+            )}
+          </Stack>
+          <Text fontSize='sm' color='fg.muted'>
+            點擊開始後會自動記錄預計完成時間；完成後可參考這裡做工作紀錄。
+          </Text>
+        </Stack>
+      </Box>
+
+      <Box
+        borderWidth='1px'
+        borderRadius='xl'
+        padding={{ base: '6', md: '8' }}
+        width='full'
+        maxW={{ base: 'full', lg: 'sm' }}
+        background='bg.subtle'
+        boxShadow='sm'
+        flex={{ base: 'none', lg: '1' }}
+        maxH='100%'
+        minH='0'
+        overflowY='auto'
+      >
+        <Stack gap='6'>
+          <Stack align='center' gap='3'>
+            <Heading size='md'>番茄時間軸</Heading>
+            <Badge colorPalette={sessionStatusColor}>{sessionStatus}</Badge>
+          </Stack>
+          <Stack gap='3'>
+            <Text fontSize='sm' color='fg.muted'>
               操作紀錄
             </Text>
             <Stack gap='3' maxHeight='56' overflowY='auto' paddingEnd='1'>
@@ -1058,100 +1173,8 @@ export function TomatoTimer() {
               )}
             </Stack>
           </Stack>
-          <Stack gap='3'>
-            <Text fontSize='sm' color='fg.muted'>
-              待辦清單
-            </Text>
-            {pendingTodos.length === 0 ? (
-              <Text fontSize='sm' color='fg.muted'>
-                目前沒有待辦事項。
-              </Text>
-            ) : (
-              <Stack gap='2' maxHeight='40' overflowY='auto' pr='1'>
-                {pendingTodos.map((todo) => {
-                  const category = getCategorySnapshot(todo.categoryId)
-                  return (
-                    <HStack
-                      key={todo.id}
-                      justify='space-between'
-                      borderWidth='1px'
-                      borderRadius='md'
-                      px='3'
-                      py='2'
-                    >
-                      <Stack gap='0'>
-                        <Text fontSize='sm'>{todo.title}</Text>
-                        <Text fontSize='xs' color='fg.muted'>
-                          類別：{category.categoryLabel}
-                        </Text>
-                      </Stack>
-                      <Button
-                        size='xs'
-                        variant='solid'
-                        colorScheme='teal'
-                        onClick={() => handleToggleTodo(todo.id)}
-                      >
-                        完成
-                      </Button>
-                    </HStack>
-                  )
-                })}
-              </Stack>
-            )}
-          </Stack>
-          <Stack gap='3'>
-            <Text fontSize='sm' color='fg.muted'>
-              待辦完成紀錄
-            </Text>
-            {completedTodos.length === 0 ? (
-              <Text fontSize='sm' color='fg.muted'>
-                還沒有完成的待辦。
-              </Text>
-            ) : (
-              <Stack gap='2' maxHeight='40' overflowY='auto' pr='1'>
-                {completedTodos.map((todo) => {
-                  const category = getCategorySnapshot(todo.categoryId)
-                  return (
-                    <HStack
-                      key={todo.id}
-                      justify='space-between'
-                      borderWidth='1px'
-                      borderRadius='md'
-                      px='3'
-                      py='2'
-                      bg='bg.subtle'
-                    >
-                      <Stack gap='0'>
-                        <Text fontSize='sm' color='fg'>
-                          {todo.title}
-                        </Text>
-                        <Text fontSize='xs' color='fg.muted'>
-                          類別：{category.categoryLabel}
-                        </Text>
-                        <Text fontSize='xs' color='fg.muted'>
-                          完成於：
-                          {todo.completedAt
-                            ? formatTimeOfDay(todo.completedAt)
-                            : '—'}
-                        </Text>
-                      </Stack>
-                      <Button
-                        size='xs'
-                        variant='outline'
-                        colorScheme='gray'
-                        onClick={() => handleToggleTodo(todo.id)}
-                      >
-                        還原
-                      </Button>
-                    </HStack>
-                  )
-                })}
-              </Stack>
-            )}
-          </Stack>
-          <Text fontSize='sm' color='fg.muted'>
-            點擊開始後會自動記錄預計完成時間；完成後可參考這裡做工作紀錄。
-          </Text>
+          
+      
         </Stack>
       </Box>
     </Stack>
