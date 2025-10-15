@@ -40,6 +40,66 @@ export const createEvent = async ({ userId, sessionKey, eventType, payload, occu
   return mapEvent(result.rows[0]);
 };
 
+export const listEventsByUser = async ({
+  userId,
+  from,
+  to,
+  sessionKey,
+  limit = 200,
+  offset = 0,
+}) => {
+  const conditions = ['user_id = $1'];
+  const values = [userId];
+  let index = values.length;
+
+  if (sessionKey) {
+    index += 1;
+    conditions.push(`session_key = $${index}`);
+    values.push(sessionKey);
+  }
+
+  if (from) {
+    index += 1;
+    conditions.push(`occurred_at >= $${index}`);
+    values.push(from);
+  }
+
+  if (to) {
+    index += 1;
+    conditions.push(`occurred_at <= $${index}`);
+    values.push(to);
+  }
+
+  index += 1;
+  const limitParam = index;
+  values.push(limit);
+
+  index += 1;
+  const offsetParam = index;
+  values.push(offset);
+
+  const result = await query(
+    `
+      SELECT
+        id,
+        user_id,
+        session_key,
+        event_type,
+        payload,
+        occurred_at,
+        created_at
+      FROM session_events
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY occurred_at DESC, created_at DESC
+      LIMIT $${limitParam} OFFSET $${offsetParam}
+    `,
+    values,
+  );
+
+  return result.rows.map(mapEvent);
+};
+
 export default {
   createEvent,
+  listEventsByUser,
 };

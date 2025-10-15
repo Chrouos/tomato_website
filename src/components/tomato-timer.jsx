@@ -1068,13 +1068,9 @@ export function TomatoTimer() {
       >
         <Stack gap='6'>
           <Stack align='center' gap='3'>
-            <Heading size='md'>番茄時間軸</Heading>
-            <Badge colorPalette={sessionStatusColor}>{sessionStatus}</Badge>
+            <Heading size='md'>操作紀錄</Heading>
           </Stack>
           <Stack gap='3'>
-            <Text fontSize='sm' color='fg.muted'>
-              操作紀錄
-            </Text>
             <Stack gap='3' maxHeight='56' overflowY='auto' paddingEnd='1'>
               {eventLog.length === 0 ? (
                 <Text fontSize='sm' color='fg.muted'>

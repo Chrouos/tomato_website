@@ -65,12 +65,29 @@ export const createSession = ({ token, session }) =>
     body: session,
   });
 
-export const fetchSessions = ({ token, limit, offset }) => {
+export const fetchSessions = ({ token, limit, offset, from, to, minDuration }) => {
   const searchParams = new URLSearchParams();
   if (limit) searchParams.set('limit', String(limit));
   if (offset) searchParams.set('offset', String(offset));
+  if (from) searchParams.set('from', from);
+  if (to) searchParams.set('to', to);
+  if (minDuration) searchParams.set('minDuration', String(minDuration));
   const query = searchParams.toString();
   return apiRequest(`/sessions${query ? `?${query}` : ''}`, {
+    method: 'GET',
+    token,
+  });
+};
+
+export const fetchEvents = ({ token, limit, offset, from, to, sessionKey }) => {
+  const searchParams = new URLSearchParams();
+  if (limit) searchParams.set('limit', String(limit));
+  if (offset) searchParams.set('offset', String(offset));
+  if (from) searchParams.set('from', from);
+  if (to) searchParams.set('to', to);
+  if (sessionKey) searchParams.set('sessionKey', sessionKey);
+  const query = searchParams.toString();
+  return apiRequest(`/events${query ? `?${query}` : ''}`, {
     method: 'GET',
     token,
   });
@@ -90,5 +107,6 @@ export default {
   loginWithGoogle,
   createSession,
   fetchSessions,
+  fetchEvents,
   createEvent,
 };
