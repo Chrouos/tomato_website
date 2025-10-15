@@ -27,6 +27,9 @@ import {
   LuPlus,
   LuRotateCcw,
 } from 'react-icons/lu'
+import { useAuth } from '../lib/auth-context.jsx'
+import { createEvent, createSession } from '../lib/api.js'
+import { toaster } from './ui/toaster.jsx'
 
 const ONE_MINUTE = 60
 const INITIAL_MINUTES = 25
@@ -55,6 +58,7 @@ function formatTimeOfDay(date) {
 }
 
 export function TomatoTimer() {
+  const { token, isAuthenticated } = useAuth()
   const [initialSeconds, setInitialSeconds] = useState(
     INITIAL_MINUTES * ONE_MINUTE,
   )
@@ -81,6 +85,16 @@ export function TomatoTimer() {
   )
   const eventId = useRef(0)
   const [eventLog, setEventLog] = useState([])
+  const [, setIsSyncingSession] = useState(false)
+  const lastSyncedKeyRef = useRef(null)
+  const sessionKeyRef = useRef(null)
+
+  const generateSessionKey = useCallback(() => {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID()
+    }
+    return `session-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  }, [])
 
   const getCategorySnapshot = useCallback(
     (categoryId) => {
@@ -99,25 +113,112 @@ export function TomatoTimer() {
     [categories],
   )
 
-  const logEvent = useCallback((type, detail = {}) => {
-    const timestamp = new Date()
-    eventId.current += 1
-    setEventLog((prev) => {
-      const entry = {
-        id: eventId.current,
-        type,
-        timestamp,
-        ...detail,
-      }
-      const next = [entry, ...prev]
-      next.sort((a, b) => {
-        const timeDiff = b.timestamp.getTime() - a.timestamp.getTime()
-        if (timeDiff !== 0) return timeDiff
-        return b.id - a.id
+  const logEvent = useCallback(
+    (type, detail = {}, options = {}) => {
+      const occurredAt = options.occurredAt instanceof Date ? options.occurredAt : new Date()
+      const timestamp = occurredAt
+      eventId.current += 1
+      setEventLog((prev) => {
+        const entry = {
+          id: eventId.current,
+          type,
+          timestamp,
+          ...detail,
+        }
+        const next = [entry, ...prev]
+        next.sort((a, b) => {
+          const timeDiff = b.timestamp.getTime() - a.timestamp.getTime()
+          if (timeDiff !== 0) return timeDiff
+          return b.id - a.id
+        })
+        return next
       })
-      return next
-    })
-  }, [])
+      const resolvedSessionKey = (() => {
+        if (options.sessionKey) {
+          sessionKeyRef.current = options.sessionKey
+          return options.sessionKey
+        }
+        if (sessionKeyRef.current) {
+          return sessionKeyRef.current
+        }
+        const generated = generateSessionKey()
+        sessionKeyRef.current = generated
+        return generated
+      })()
+
+      if (isAuthenticated && token) {
+        createEvent({
+          token,
+          event: {
+            sessionKey: resolvedSessionKey,
+            eventType: type,
+            payload: detail,
+            occurredAt: occurredAt.toISOString(),
+          },
+        }).catch((error) => {
+          console.warn('Failed to record event', error)
+        })
+      }
+
+      if (options.clearSessionKey) {
+        sessionKeyRef.current = null
+      }
+    },
+    [generateSessionKey, isAuthenticated, token],
+  )
+
+  const syncSession = useCallback(
+    async ({ totalSeconds, categorySnapshot, finishedAt }) => {
+      if (!isAuthenticated || !token) {
+        return
+      }
+
+      const startedAtDate =
+        sessionStart instanceof Date
+          ? sessionStart
+          : finishedAt instanceof Date
+            ? new Date(finishedAt.getTime() - totalSeconds * 1000)
+            : null
+
+      const startedAtIso = startedAtDate ? startedAtDate.toISOString() : null
+      const finishedAtIso = finishedAt instanceof Date ? finishedAt.toISOString() : null
+      const dedupeKey = `${startedAtIso ?? 'unknown'}-${finishedAtIso ?? Date.now()}-${totalSeconds}-${categorySnapshot.categoryId ?? 'none'}`
+
+      if (lastSyncedKeyRef.current === dedupeKey) {
+        return
+      }
+
+      lastSyncedKeyRef.current = dedupeKey
+      setIsSyncingSession(true)
+
+      try {
+        await createSession({
+          token,
+          session: {
+            durationSeconds: totalSeconds,
+            categoryId: categorySnapshot.categoryId,
+            categoryLabel: categorySnapshot.categoryLabel,
+            startedAt: startedAtIso,
+            completedAt: finishedAtIso,
+          },
+        })
+        toaster.create({
+          title: '已同步番茄鐘紀錄',
+          type: 'success',
+        })
+      } catch (error) {
+        lastSyncedKeyRef.current = null
+        toaster.create({
+          title: '同步番茄鐘紀錄失敗',
+          description: error.message,
+          type: 'error',
+        })
+      } finally {
+        setIsSyncingSession(false)
+      }
+    },
+    [isAuthenticated, token, sessionStart],
+  )
 
   useEffect(() => {
     if (categories.length === 0) {
@@ -152,11 +253,24 @@ export function TomatoTimer() {
       setSecondsLeft((prev) => {
         if (prev <= 1) {
           setIsRunning(false)
-          setSessionEnd(new Date())
+          const finishedAt = new Date()
+          setSessionEnd(finishedAt)
           const categorySnapshot = getCategorySnapshot(activeCategoryId)
-          logEvent('complete', {
+          logEvent(
+            'complete',
+            {
+              totalSeconds: initialSeconds,
+              ...categorySnapshot,
+            },
+            {
+              occurredAt: finishedAt,
+              clearSessionKey: true,
+            },
+          )
+          syncSession({
             totalSeconds: initialSeconds,
-            ...categorySnapshot,
+            categorySnapshot,
+            finishedAt,
           })
           return 0
         }
@@ -172,6 +286,8 @@ export function TomatoTimer() {
     activeCategoryId,
     getCategorySnapshot,
     logEvent,
+    sessionStart,
+    syncSession,
   ])
 
   const timeLabel = useMemo(() => formatTime(secondsLeft), [secondsLeft])
@@ -207,10 +323,14 @@ export function TomatoTimer() {
       selectedCategoryId ?? activeCategoryId,
     )
     setActiveCategoryId(null)
-    logEvent('reset', {
-      totalSeconds: initialSeconds,
-      ...categorySnapshot,
-    })
+    logEvent(
+      'reset',
+      {
+        totalSeconds: initialSeconds,
+        ...categorySnapshot,
+      },
+      { clearSessionKey: true },
+    )
   }
 
   const commitInputValues = (minutes, seconds) => {
@@ -250,10 +370,15 @@ export function TomatoTimer() {
       setIsRunning(false)
       setSessionEnd(null)
       const categorySnapshot = getCategorySnapshot(activeCategoryId)
-      logEvent('pause', {
-        remainingSeconds: secondsLeft,
-        ...categorySnapshot,
-      })
+      const now = new Date()
+      logEvent(
+        'pause',
+        {
+          remainingSeconds: secondsLeft,
+          ...categorySnapshot,
+        },
+        { sessionKey: sessionKeyRef.current ?? undefined, occurredAt: now },
+      )
       return
     }
 
@@ -284,10 +409,22 @@ export function TomatoTimer() {
     const eventType =
       hasStartedBefore && secondsLeft !== initialSeconds ? 'resume' : 'start'
     const categorySnapshot = getCategorySnapshot(baseCategoryId)
-    logEvent(eventType, {
-      remainingSeconds: secondsLeft,
-      ...categorySnapshot,
-    })
+    const sessionKey =
+      eventType === 'start' || !sessionKeyRef.current
+        ? generateSessionKey()
+        : sessionKeyRef.current
+
+    logEvent(
+      eventType,
+      {
+        remainingSeconds: secondsLeft,
+        ...categorySnapshot,
+      },
+      {
+        sessionKey,
+        occurredAt: now,
+      },
+    )
     setIsRunning(true)
   }
 
@@ -328,10 +465,14 @@ export function TomatoTimer() {
     }
     setTodos((prev) => [todo, ...prev])
     setNewTodoTitle('')
-    logEvent('todo-add', {
-      todoTitle: trimmed,
-      ...categorySnapshot,
-    })
+    logEvent(
+      'todo-add',
+      {
+        todoTitle: trimmed,
+        ...categorySnapshot,
+      },
+      { sessionKey: sessionKeyRef.current ?? undefined },
+    )
   }
 
   const handleToggleTodo = (id) => {
@@ -341,10 +482,14 @@ export function TomatoTimer() {
     const nextCompleted = !target.completed
     const categorySnapshot = getCategorySnapshot(target.categoryId)
 
-    logEvent(nextCompleted ? 'todo-complete' : 'todo-reopen', {
-      todoTitle: target.title,
-      ...categorySnapshot,
-    })
+    logEvent(
+      nextCompleted ? 'todo-complete' : 'todo-reopen',
+      {
+        todoTitle: target.title,
+        ...categorySnapshot,
+      },
+      { sessionKey: sessionKeyRef.current ?? undefined },
+    )
 
     setTodos((prev) =>
       prev.map((todo) =>

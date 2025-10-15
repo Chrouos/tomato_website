@@ -1,0 +1,90 @@
+# 本地資料庫初始化
+
+此資料夾用於放置 **不會被版控追蹤** 的 SQL 腳本，可在本機初始化 PostgreSQL。
+
+建議建立類似 `001_create_users.sql` 的檔案，自行調整欄位。請先建立通用觸發函式，再建立資料表與觸發器：
+
+```sql
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+CREATE OR REPLACE FUNCTION trigger_set_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TABLE IF NOT EXISTS users (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  email TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  password_hash TEXT,
+  provider TEXT NOT NULL DEFAULT 'local',
+  provider_id TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS users_provider_id_idx ON users(provider, provider_id);
+
+CREATE TRIGGER set_users_updated_at
+BEFORE UPDATE ON users
+FOR EACH ROW
+EXECUTE FUNCTION trigger_set_timestamp();
+
+CREATE TABLE IF NOT EXISTS email_verification_codes (
+  email TEXT PRIMARY KEY,
+  code_hash TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TRIGGER set_email_verification_codes_updated_at
+BEFORE UPDATE ON email_verification_codes
+FOR EACH ROW
+EXECUTE FUNCTION trigger_set_timestamp();
+
+CREATE TABLE IF NOT EXISTS sessions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  duration_seconds INTEGER NOT NULL CHECK (duration_seconds > 0),
+  category_id TEXT,
+  category_label TEXT,
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS sessions_user_id_idx ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS sessions_completed_at_idx ON sessions(completed_at DESC NULLS LAST);
+
+CREATE TRIGGER set_sessions_updated_at
+BEFORE UPDATE ON sessions
+FOR EACH ROW
+EXECUTE FUNCTION trigger_set_timestamp();
+
+CREATE TABLE IF NOT EXISTS session_events (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  session_key TEXT,
+  event_type TEXT NOT NULL,
+  payload JSONB,
+  occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS session_events_user_id_idx ON session_events(user_id);
+CREATE INDEX IF NOT EXISTS session_events_session_key_idx ON session_events(session_key);
+```
+
+資料表關聯說明：
+
+- `users`：儲存註冊與社群登入的使用者。
+- `email_verification_codes`：儲存 1 小時內有效的 Email 註冊驗證碼，每個 Email 僅保留最新一筆。
+- `sessions`：儲存番茄鐘完成記錄，關聯對應的使用者與分類資訊。
+- `session_events`：紀錄每一次操作（開始、暫停、重置等），可透過 `session_key` 對應同一輪番茄鐘。
+
+> 請根據實際需求調整，並確保這些 SQL 檔案保留在本機不要上傳。

@@ -4,6 +4,9 @@ import morgan from 'morgan';
 import swaggerUi from 'swagger-ui-express';
 import swaggerSpec from './swagger.js';
 import healthRouter from './routes/health.js';
+import authRouter from './routes/auth.js';
+import sessionsRouter from './routes/sessions.js';
+import eventsRouter from './routes/events.js';
 import { getEnv, getEnvNumber } from './config/env.js';
 
 const app = express();
@@ -21,6 +24,9 @@ app.get('/', (req, res) => {
 });
 
 app.use('/health', healthRouter);
+app.use('/auth', authRouter);
+app.use('/sessions', sessionsRouter);
+app.use('/events', eventsRouter);
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true }));
 
 const port = getEnvNumber('SERVER_PORT', 4000);
