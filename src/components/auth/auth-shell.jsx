@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Alert,
   Box,
@@ -17,6 +17,7 @@ import {
   loginWithEmail,
   registerWithEmail,
   requestEmailVerificationCode,
+  loginWithGoogle,
 } from '../../lib/api.js'
 import { useAuth } from '../../lib/auth-context.jsx'
 import { toaster } from '../ui/toaster.jsx'
@@ -41,6 +42,70 @@ export function AuthShell() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isRequestingCode, setIsRequestingCode] = useState(false)
   const [codeInfo, setCodeInfo] = useState(null)
+
+  // ---- Google Sign-In ----
+  const gsiButtonRef = useRef(null)
+  const [gsiReady, setGsiReady] = useState(false)
+
+  useEffect(() => {
+    if (window.google?.accounts?.id) {
+      setGsiReady(true)
+      return
+    }
+    const s = document.createElement('script')
+    s.src = 'https://accounts.google.com/gsi/client'
+    s.async = true
+    s.defer = true
+    s.onload = () => setGsiReady(true)
+    document.head.appendChild(s)
+  }, [])
+
+  useEffect(() => {
+    if (!gsiReady || !gsiButtonRef.current) return
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
+    if (!clientId) {
+      toaster.create({
+        title: '缺少 Google Client ID',
+        description: '請在 .env.local 設定 VITE_GOOGLE_CLIENT_ID',
+        type: 'error',
+      })
+      return
+    }
+
+    window.google.accounts.id.initialize({
+      client_id: clientId,
+      callback: async (resp) => {
+        try {
+          setIsSubmitting(true)
+          const payload = await loginWithGoogle({ idToken: resp.credential })
+          login(payload.user, payload.token)
+          toaster.create({ title: 'Google 登入成功', type: 'success' })
+        } catch (error) {
+          toaster.create({
+            title: 'Google 登入失敗',
+            description: error.message,
+            type: 'error',
+          })
+        } finally {
+          setIsSubmitting(false)
+        }
+      },
+      ux_mode: 'popup',
+      auto_select: false,
+    })
+
+    // 避免重複渲染按鈕
+    gsiButtonRef.current.innerHTML = ''
+
+    window.google.accounts.id.renderButton(gsiButtonRef.current, {
+      type: 'standard',
+      theme: 'outline',
+      size: 'large',
+      shape: 'pill',
+      text: 'signin_with',
+      logo_alignment: 'left',
+    })
+  }, [gsiReady])
 
   const handleSwitchMode = (nextMode) => {
     setMode(nextMode)
@@ -68,17 +133,12 @@ export function AuthShell() {
 
   const handleRequestCode = async () => {
     if (!registerState.email) {
-      toaster.create({
-        title: '請先輸入 Email',
-        type: 'warning',
-      })
+      toaster.create({ title: '請先輸入 Email', type: 'warning' })
       return
     }
     setIsRequestingCode(true)
     try {
-      const result = await requestEmailVerificationCode({
-        email: registerState.email,
-      })
+      const result = await requestEmailVerificationCode({ email: registerState.email })
       setCodeInfo(result)
       toaster.create({
         title: '驗證碼已寄送',
@@ -113,16 +173,9 @@ export function AuthShell() {
     try {
       const payload = await registerWithEmail(registerState)
       login(payload.user, payload.token)
-      toaster.create({
-        title: '註冊成功',
-        type: 'success',
-      })
+      toaster.create({ title: '註冊成功', type: 'success' })
     } catch (error) {
-      toaster.create({
-        title: '註冊失敗',
-        description: error.message,
-        type: 'error',
-      })
+      toaster.create({ title: '註冊失敗', description: error.message, type: 'error' })
     } finally {
       setIsSubmitting(false)
     }
@@ -134,16 +187,9 @@ export function AuthShell() {
     try {
       const payload = await loginWithEmail(loginState)
       login(payload.user, payload.token)
-      toaster.create({
-        title: '登入成功',
-        type: 'success',
-      })
+      toaster.create({ title: '登入成功', type: 'success' })
     } catch (error) {
-      toaster.create({
-        title: '登入失敗',
-        description: error.message,
-        type: 'error',
-      })
+      toaster.create({ title: '登入失敗', description: error.message, type: 'error' })
     } finally {
       setIsSubmitting(false)
     }
@@ -170,6 +216,12 @@ export function AuthShell() {
                 ? '登入後即可管理你的番茄鐘紀錄。'
                 : '輸入 Email 取得驗證碼，再完成註冊流程。'}
             </Text>
+          </Stack>
+
+          {/* Google 登入按鈕 */}
+          <Stack gap='3'>
+            <Box ref={gsiButtonRef} display='flex' justifyContent='center' />
+            <Box as='hr' borderTopWidth='1px' borderColor='border' mt='2' />
           </Stack>
 
           {mode === 'login' ? (
@@ -223,6 +275,7 @@ export function AuthShell() {
                   按下按鈕後會寄送 6 位數驗證碼到填寫的 Email。
                 </Field.HelperText>
               </Field.Root>
+
               <Field.Root required>
                 <Field.Label>驗證碼</Field.Label>
                 <Input
@@ -234,11 +287,11 @@ export function AuthShell() {
                 />
                 {codeInfo?.expiresAt && (
                   <Field.HelperText>
-                    驗證碼將於{' '}
-                    {new Date(codeInfo.expiresAt).toLocaleString()} 到期
+                    驗證碼將於 {new Date(codeInfo.expiresAt).toLocaleString()} 到期
                   </Field.HelperText>
                 )}
               </Field.Root>
+
               <Field.Root required>
                 <Field.Label>暱稱</Field.Label>
                 <Input
@@ -247,6 +300,7 @@ export function AuthShell() {
                   placeholder='你的名字或暱稱'
                 />
               </Field.Root>
+
               <Field.Root required>
                 <Field.Label>密碼</Field.Label>
                 <Input
@@ -258,6 +312,7 @@ export function AuthShell() {
                   minLength={8}
                 />
               </Field.Root>
+
               <Button type='submit' colorScheme='primary' isLoading={isSubmitting}>
                 建立帳號
               </Button>
@@ -268,15 +323,13 @@ export function AuthShell() {
             <Alert.Indicator />
             <Alert.Content>
               <Alert.Description>
-                目前僅開放 Email 註冊與登入。完成註冊後即可使用番茄鐘。
+                目前開放 Email 與 Google 登入。完成註冊後即可使用番茄鐘。
               </Alert.Description>
             </Alert.Content>
           </Alert.Root>
 
           <HStack justify='center'>
-            <Text>
-              {mode === 'login' ? '還沒有帳號？' : '已經有帳號了？'}
-            </Text>
+            <Text>{mode === 'login' ? '還沒有帳號？' : '已經有帳號了？'}</Text>
             <Link
               onClick={() => handleSwitchMode(mode === 'login' ? 'register' : 'login')}
               fontWeight='semibold'

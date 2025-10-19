@@ -165,7 +165,7 @@ router.post(
  * @openapi
  * /auth/google:
  *   post:
- *     summary: 使用 Google 登入
+ *     summary: 使用 Google 登入（若不存在則自動註冊）
  *     tags:
  *       - Auth
  *     requestBody:
@@ -179,10 +179,10 @@ router.post(
  *             properties:
  *               idToken:
  *                 type: string
- *                 description: 從 Google OAuth 取得的 ID Token
+ *                 description: Google Identity Services 回傳的 ID Token(jwt)
  *     responses:
  *       200:
- *         description: 登入成功
+ *         description: 登入成功 / 自動註冊後登入成功
  *         content:
  *           application/json:
  *             schema:
@@ -194,10 +194,12 @@ router.post(
  *                   type: string
  *       400:
  *         description: 請求錯誤
+ *       401:
+ *         description: 驗證失敗
  */
 router.post(
   '/google',
-  handleRequest(async (req) => loginWithGoogle(req.body)),
-);
+  handleRequest(async (req) => googleLogin(req.body), 200),
+)
 
 export default router;
