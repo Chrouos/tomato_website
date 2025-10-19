@@ -58,9 +58,6 @@ export default function App() {
           <HStack justify='space-between' align='center' flexWrap='wrap' gap='4'>
             <Stack gap='0'>
               <Heading size='lg'>Tomato Website</Heading>
-              <Text fontSize='sm' color='fg.muted'>
-                {user?.name || user?.email}
-              </Text>
             </Stack>
             <HStack gap='3' flexWrap='wrap'>
               {navLinks.map((link) => {
