@@ -157,7 +157,71 @@ EXECUTE FUNCTION trigger_set_timestamp();
 - `daily_task_completions`：紀錄每日任務在特定日期的完成狀態，每個任務每天僅一筆。
 - `todos`：一般待辦事項，包含完成狀態與完成時間。
 
-> 請根據實際需求調整，並確保這些 SQL 檔案保留在本機不要上傳。
+## 欄位說明與建議值
+
+### `session_events`
+
+| 欄位 | 型別 | 說明 |
+| ---- | ---- | ---- |
+| `id` | UUID | 事件主鍵。 |
+| `user_id` | UUID | 對應的使用者 ID。 |
+| `session_key` | TEXT | 同一次番茄鐘流程的識別字串，前端在開始/繼續時會沿用，便於事件分組。 |
+| `event_type` | TEXT | 事件類型，常見值：`start`、`resume`、`pause`、`reset`、`complete`、`todo-add`、`todo-complete`、`todo-reopen`、`daily-todo-add`、`daily-todo-complete`、`daily-todo-reset`。 |
+| `payload` | JSONB | 事件附帶資訊（例如剩餘秒數或待辦標題），結構由前端決定。 |
+| `occurred_at` | TIMESTAMPTZ | 事件發生時間，未提供時預設為建立時間。 |
+| `created_at` | TIMESTAMPTZ | 建立時間。 |
+
+### `sessions`
+
+| 欄位 | 型別 | 說明 |
+| ---- | ---- | ---- |
+| `id` | UUID | 主鍵。 |
+| `user_id` | UUID | 使用者 ID。 |
+| `duration_seconds` | INTEGER | 番茄鐘總秒數。 |
+| `category_id` | TEXT | 對應分類 ID，可為 `NULL`。 |
+| `category_label` | TEXT | 同步時的分類名稱快照。 |
+| `started_at` | TIMESTAMPTZ | 番茄鐘開始時間，可為 `NULL`（例如手動補紀錄）。 |
+| `completed_at` | TIMESTAMPTZ | 完成時間，未完成可為 `NULL`。 |
+| `created_at` | TIMESTAMPTZ | 建立時間。 |
+| `updated_at` | TIMESTAMPTZ | 更新時間。 |
+
+### `daily_tasks`
+
+| 欄位 | 型別 | 說明 |
+| ---- | ---- | ---- |
+| `id` | UUID | 主鍵。 |
+| `user_id` | UUID | 所屬使用者。 |
+| `title` | TEXT | 每日任務內容。 |
+| `category_id` | TEXT | 參考 `categories.id`，允許 `NULL`。 |
+| `archived` | BOOLEAN | 是否封存（`TRUE` 表示不再顯示於清單）。 |
+| `created_at` | TIMESTAMPTZ | 建立時間。 |
+| `updated_at` | TIMESTAMPTZ | 更新時間。 |
+
+### `daily_task_completions`
+
+| 欄位 | 型別 | 說明 |
+| ---- | ---- | ---- |
+| `id` | UUID | 主鍵。 |
+| `daily_task_id` | UUID | 對應每日任務。 |
+| `completed_on` | DATE | 完成日期（以日期為單位），每個任務每天僅一筆。 |
+| `created_at` | TIMESTAMPTZ | 建立時間。 |
+| `updated_at` | TIMESTAMPTZ | 更新時間。 |
+
+### `todos`
+
+| 欄位 | 型別 | 說明 |
+| ---- | ---- | ---- |
+| `id` | UUID | 主鍵。 |
+| `user_id` | UUID | 所屬使用者。 |
+| `title` | TEXT | 待辦內容。 |
+| `category_id` | TEXT | 參考 `categories.id`，允許 `NULL`。 |
+| `completed` | BOOLEAN | 是否已完成。 |
+| `completed_at` | TIMESTAMPTZ | 完成時間（未完成為 `NULL`）。 |
+| `archived` | BOOLEAN | 是否封存（`TRUE` 表示軟刪除）。 |
+| `created_at` | TIMESTAMPTZ | 建立時間。 |
+| `updated_at` | TIMESTAMPTZ | 更新時間。 |
+
+> `archived = TRUE` 的資料建議前端預設不載入，可作為軟刪除或歷史紀錄用途。
 
 ```
 docker compose down && docker compose up -d postgres
