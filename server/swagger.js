@@ -218,6 +218,149 @@ const definition = {
           },
         },
       },
+      DailyTask: {
+        type: 'object',
+        properties: {
+          id: {
+            type: 'string',
+            format: 'uuid',
+          },
+          userId: {
+            type: 'string',
+            format: 'uuid',
+          },
+          title: {
+            type: 'string',
+          },
+          categoryId: {
+            type: 'string',
+            nullable: true,
+          },
+          archived: {
+            type: 'boolean',
+          },
+          createdAt: {
+            type: 'string',
+            format: 'date-time',
+          },
+          updatedAt: {
+            type: 'string',
+            format: 'date-time',
+          },
+        },
+      },
+      DailyTaskWithStatus: {
+        allOf: [
+          { $ref: '#/components/schemas/DailyTask' },
+          {
+            type: 'object',
+            properties: {
+              completedToday: {
+                type: 'boolean',
+              },
+              completionId: {
+                type: 'string',
+                format: 'uuid',
+                nullable: true,
+              },
+              completedOn: {
+                type: 'string',
+                format: 'date',
+                nullable: true,
+              },
+            },
+          },
+        ],
+      },
+      NewDailyTask: {
+        type: 'object',
+        required: ['title'],
+        properties: {
+          title: {
+            type: 'string',
+          },
+          categoryId: {
+            type: 'string',
+            nullable: true,
+          },
+        },
+      },
+      UpdateDailyTask: {
+        type: 'object',
+        properties: {
+          title: {
+            type: 'string',
+          },
+          categoryId: {
+            type: 'string',
+            nullable: true,
+          },
+        },
+      },
+      Todo: {
+        type: 'object',
+        properties: {
+          id: {
+            type: 'string',
+            format: 'uuid',
+          },
+          userId: {
+            type: 'string',
+            format: 'uuid',
+          },
+          title: {
+            type: 'string',
+          },
+          categoryId: {
+            type: 'string',
+            nullable: true,
+          },
+          completed: {
+            type: 'boolean',
+          },
+          completedAt: {
+            type: 'string',
+            format: 'date-time',
+            nullable: true,
+          },
+          archived: {
+            type: 'boolean',
+          },
+          createdAt: {
+            type: 'string',
+            format: 'date-time',
+          },
+          updatedAt: {
+            type: 'string',
+            format: 'date-time',
+          },
+        },
+      },
+      NewTodo: {
+        type: 'object',
+        required: ['title'],
+        properties: {
+          title: {
+            type: 'string',
+          },
+          categoryId: {
+            type: 'string',
+            nullable: true,
+          },
+        },
+      },
+      UpdateTodo: {
+        type: 'object',
+        properties: {
+          title: {
+            type: 'string',
+          },
+          categoryId: {
+            type: 'string',
+            nullable: true,
+          },
+        },
+      },
     },
     securitySchemes: {
       bearerAuth: {

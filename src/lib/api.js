@@ -119,6 +119,87 @@ export const deleteCategory = ({ token, categoryId }) =>
     token,
   });
 
+export const fetchDailyTasks = ({ token, date }) => {
+  const searchParams = new URLSearchParams();
+  if (date) searchParams.set('date', date);
+  const query = searchParams.toString();
+  return apiRequest(`/daily-tasks${query ? `?${query}` : ''}`, {
+    method: 'GET',
+    token,
+  });
+};
+
+export const createDailyTask = ({ token, title, categoryId }) =>
+  apiRequest('/daily-tasks', {
+    method: 'POST',
+    token,
+    body: { title, categoryId: categoryId ?? null },
+  });
+
+export const updateDailyTask = ({ token, taskId, title, categoryId }) =>
+  apiRequest(`/daily-tasks/${encodeURIComponent(taskId)}`, {
+    method: 'PATCH',
+    token,
+    body: { title, categoryId: categoryId ?? null },
+  });
+
+export const archiveDailyTask = ({ token, taskId }) =>
+  apiRequest(`/daily-tasks/${encodeURIComponent(taskId)}`, {
+    method: 'DELETE',
+    token,
+  });
+
+export const completeDailyTask = ({ token, taskId, date }) =>
+  apiRequest(`/daily-tasks/${encodeURIComponent(taskId)}/complete`, {
+    method: 'POST',
+    token,
+    body: { date },
+  });
+
+export const resetDailyTask = ({ token, taskId, date }) =>
+  apiRequest(`/daily-tasks/${encodeURIComponent(taskId)}/complete${date ? `?date=${encodeURIComponent(date)}` : ''}`, {
+    method: 'DELETE',
+    token,
+  });
+
+export const fetchTodos = ({ token }) =>
+  apiRequest('/todos', {
+    method: 'GET',
+    token,
+  });
+
+export const createTodo = ({ token, title, categoryId }) =>
+  apiRequest('/todos', {
+    method: 'POST',
+    token,
+    body: { title, categoryId: categoryId ?? null },
+  });
+
+export const updateTodo = ({ token, todoId, title, categoryId }) =>
+  apiRequest(`/todos/${encodeURIComponent(todoId)}`, {
+    method: 'PATCH',
+    token,
+    body: { title, categoryId: categoryId ?? null },
+  });
+
+export const completeTodo = ({ token, todoId }) =>
+  apiRequest(`/todos/${encodeURIComponent(todoId)}/complete`, {
+    method: 'POST',
+    token,
+  });
+
+export const reopenTodo = ({ token, todoId }) =>
+  apiRequest(`/todos/${encodeURIComponent(todoId)}/complete`, {
+    method: 'DELETE',
+    token,
+  });
+
+export const archiveTodo = ({ token, todoId }) =>
+  apiRequest(`/todos/${encodeURIComponent(todoId)}`, {
+    method: 'DELETE',
+    token,
+  });
+
 export default {
   requestEmailVerificationCode,
   registerWithEmail,
@@ -131,4 +212,16 @@ export default {
   fetchCategories,
   createCategory,
   deleteCategory,
+  fetchDailyTasks,
+  createDailyTask,
+  updateDailyTask,
+  archiveDailyTask,
+  completeDailyTask,
+  resetDailyTask,
+  fetchTodos,
+  createTodo,
+  updateTodo,
+  completeTodo,
+  reopenTodo,
+  archiveTodo,
 };

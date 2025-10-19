@@ -8,6 +8,8 @@ import authRouter from './routes/auth.js';
 import sessionsRouter from './routes/sessions.js';
 import eventsRouter from './routes/events.js';
 import categoriesRouter from './routes/categories.js';
+import dailyTasksRouter from './routes/dailyTasks.js';
+import todosRouter from './routes/todos.js';
 import { getEnv, getEnvNumber } from './config/env.js';
 import { ensureDefaultCategories } from './repositories/categoryRepository.js';
 
@@ -30,6 +32,8 @@ app.use('/auth', authRouter);
 app.use('/sessions', sessionsRouter);
 app.use('/events', eventsRouter);
 app.use('/categories', categoriesRouter);
+app.use('/daily-tasks', dailyTasksRouter);
+app.use('/todos', todosRouter);
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true }));
 
 const port = getEnvNumber('SERVER_PORT', 4000);
