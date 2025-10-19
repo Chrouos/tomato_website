@@ -199,7 +199,7 @@ router.post(
  */
 router.post(
   '/google',
-  handleRequest(async (req) => googleLogin(req.body), 200),
+  handleRequest(async (req) => loginWithGoogle(req.body), 200),
 )
 
 export default router;
