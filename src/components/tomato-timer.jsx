@@ -38,7 +38,11 @@ import {
 import { toaster } from './ui/toaster.jsx'
 
 const ONE_MINUTE = 60
+const ONE_HOUR = ONE_MINUTE * 60
 const INITIAL_MINUTES = 25
+const MAX_TOTAL_HOURS = 24
+const MAX_TOTAL_SECONDS = MAX_TOTAL_HOURS * ONE_HOUR
+const DAILY_TODOS_STORAGE_KEY = 'tomato_daily_todos_v1'
 function formatTime(totalSeconds) {
   const minutes = Math.floor(totalSeconds / 60)
   const seconds = totalSeconds % 60
@@ -56,6 +60,10 @@ function formatTimeOfDay(date) {
   }).format(date)
 }
 
+function getTodayKey() {
+  return new Date().toISOString().slice(0, 10)
+}
+
 export function TomatoTimer() {
   const { token, isAuthenticated } = useAuth()
   const [initialSeconds, setInitialSeconds] = useState(
@@ -63,8 +71,11 @@ export function TomatoTimer() {
   )
   const [secondsLeft, setSecondsLeft] = useState(initialSeconds)
   const [isRunning, setIsRunning] = useState(false)
+  const [inputHours, setInputHours] = useState(() =>
+    Math.floor(initialSeconds / ONE_HOUR),
+  )
   const [inputMinutes, setInputMinutes] = useState(() =>
-    Math.floor(initialSeconds / ONE_MINUTE),
+    Math.floor((initialSeconds % ONE_HOUR) / ONE_MINUTE),
   )
   const [inputSeconds, setInputSeconds] = useState(
     initialSeconds % ONE_MINUTE,
@@ -78,6 +89,10 @@ export function TomatoTimer() {
   const [todos, setTodos] = useState([])
   const [newTodoTitle, setNewTodoTitle] = useState('')
   const [newTodoCategoryId, setNewTodoCategoryId] = useState(null)
+  const [dailyTodos, setDailyTodos] = useState([])
+  const [newDailyTodoTitle, setNewDailyTodoTitle] = useState('')
+  const [newDailyTodoCategoryId, setNewDailyTodoCategoryId] = useState(null)
+  const [todayKey, setTodayKey] = useState(() => getTodayKey())
   const eventId = useRef(0)
   const [eventLog, setEventLog] = useState([])
   const [, setIsSyncingSession] = useState(false)
@@ -268,6 +283,19 @@ export function TomatoTimer() {
   }, [categories, selectedCategoryId])
 
   useEffect(() => {
+    if (categories.length === 0) {
+      setNewDailyTodoCategoryId(null)
+      return
+    }
+    if (
+      !newDailyTodoCategoryId ||
+      !categories.some((category) => category.id === newDailyTodoCategoryId)
+    ) {
+      setNewDailyTodoCategoryId(categories[0].id)
+    }
+  }, [categories, newDailyTodoCategoryId])
+
+  useEffect(() => {
     if (
       categories.length === 0 ||
       (newTodoCategoryId &&
@@ -277,6 +305,70 @@ export function TomatoTimer() {
     }
     setNewTodoCategoryId(selectedCategoryId ?? categories[0]?.id ?? null)
   }, [categories, newTodoCategoryId, selectedCategoryId])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const raw = window.localStorage.getItem(DAILY_TODOS_STORAGE_KEY)
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      if (!Array.isArray(parsed)) return
+      const normalized = parsed
+        .map((item) => {
+          if (!item || typeof item !== 'object') return null
+          const id =
+            typeof item.id === 'string'
+              ? item.id
+              : `daily-${Date.now()}-${Math.random().toString(16).slice(2)}`
+          const title = typeof item.title === 'string' ? item.title : ''
+          if (!title.trim()) return null
+          return {
+            id,
+            title,
+            categoryId: item.categoryId ?? null,
+            createdAt: item.createdAt ?? new Date().toISOString(),
+            updatedAt: item.updatedAt ?? null,
+            completedOn: item.completedOn === todayKey ? todayKey : null,
+          }
+        })
+        .filter(Boolean)
+      setDailyTodos(normalized)
+    } catch (error) {
+      console.warn('Failed to load daily todos', error)
+    }
+  }, [todayKey])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const payload = dailyTodos.map((todo) => ({
+        ...todo,
+        completedOn: todo.completedOn === todayKey ? todayKey : null,
+      }))
+      window.localStorage.setItem(
+        DAILY_TODOS_STORAGE_KEY,
+        JSON.stringify(payload),
+      )
+    } catch (error) {
+      console.warn('Failed to persist daily todos', error)
+    }
+  }, [dailyTodos, todayKey])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const nextKey = getTodayKey()
+      if (nextKey !== todayKey) {
+        setTodayKey(nextKey)
+        setDailyTodos((prev) =>
+          prev.map((todo) => ({
+            ...todo,
+            completedOn: null,
+          })),
+        )
+      }
+    }, 60 * 1000)
+    return () => clearInterval(interval)
+  }, [todayKey])
 
   useEffect(() => {
     if (!isRunning || secondsLeft <= 0) {
@@ -328,17 +420,20 @@ export function TomatoTimer() {
 
   useEffect(() => {
     if (!isRunning) {
-      setInputMinutes(Math.floor(secondsLeft / ONE_MINUTE))
-      setInputSeconds(secondsLeft % ONE_MINUTE)
+      const totalHours = Math.floor(secondsLeft / ONE_HOUR)
+      const remainder = secondsLeft % ONE_HOUR
+      setInputHours(totalHours)
+      setInputMinutes(Math.floor(remainder / ONE_MINUTE))
+      setInputSeconds(remainder % ONE_MINUTE)
     }
   }, [secondsLeft, isRunning])
 
-  const handleAdjust = (deltaMinutes) => {
+  const handleAdjust = (deltaHours) => {
     if (isRunning) {
       return
     }
     setSecondsLeft((prev) => {
-      const deltaSeconds = deltaMinutes * ONE_MINUTE
+      const deltaSeconds = deltaHours * ONE_HOUR
       const next = Math.max(prev + deltaSeconds, 0)
       setInitialSeconds(next)
       setSessionStart(null)
@@ -367,36 +462,65 @@ export function TomatoTimer() {
     )
   }
 
-  const commitInputValues = (minutes, seconds) => {
-    const safeMinutes = Math.max(Math.floor(Number(minutes) || 0), 0)
-    const safeSeconds = Math.min(
-      Math.max(Math.floor(Number(seconds) || 0), 0),
-      ONE_MINUTE - 1,
-    )
-    setInputMinutes(safeMinutes)
-    setInputSeconds(safeSeconds)
-    const totalSeconds = safeMinutes * ONE_MINUTE + safeSeconds
-    setInitialSeconds(totalSeconds)
-    setSecondsLeft(totalSeconds)
-    setSessionStart(null)
-    setSessionEnd(null)
-    setActiveCategoryId(null)
+  const applyInputValues = useCallback(
+    (hours, minutes, seconds, { updateInputs = true } = {}) => {
+      const safeHours = Math.max(Math.floor(Number(hours) || 0), 0)
+      const safeMinutes = Math.max(Math.floor(Number(minutes) || 0), 0)
+      const safeSeconds = Math.min(
+        Math.max(Math.floor(Number(seconds) || 0), 0),
+        ONE_MINUTE - 1,
+      )
+      const clampedMinutes = Math.min(safeMinutes, ONE_MINUTE - 1)
+
+      let totalSeconds =
+        safeHours * ONE_HOUR + clampedMinutes * ONE_MINUTE + safeSeconds
+
+      if (totalSeconds > MAX_TOTAL_SECONDS) {
+        totalSeconds = MAX_TOTAL_SECONDS
+      }
+
+      if (updateInputs) {
+        const nextHours = Math.floor(totalSeconds / ONE_HOUR)
+        const remainder = totalSeconds % ONE_HOUR
+        const nextMinutes = Math.floor(remainder / ONE_MINUTE)
+        const nextSeconds = remainder % ONE_MINUTE
+        setInputHours(nextHours)
+        setInputMinutes(nextMinutes)
+        setInputSeconds(nextSeconds)
+      }
+
+      setInitialSeconds(totalSeconds)
+      setSecondsLeft(totalSeconds)
+      setSessionStart(null)
+      setSessionEnd(null)
+      setActiveCategoryId(null)
+    },
+    [],
+  )
+
+  const handleHoursChange = ({ valueAsNumber }) => {
+    if (isRunning) return
+    const next = Number.isNaN(valueAsNumber) ? 0 : Math.max(valueAsNumber, 0)
+    const capped = Math.min(next, MAX_TOTAL_HOURS)
+    applyInputValues(capped, inputMinutes, inputSeconds)
   }
 
   const handleMinutesChange = ({ valueAsNumber }) => {
+    if (isRunning) return
     const next = Number.isNaN(valueAsNumber) ? 0 : Math.max(valueAsNumber, 0)
-    setInputMinutes(Math.floor(next))
+    applyInputValues(inputHours, Math.min(next, ONE_MINUTE - 1), inputSeconds)
   }
 
   const handleSecondsChange = ({ valueAsNumber }) => {
+    if (isRunning) return
     const raw = Number.isNaN(valueAsNumber) ? 0 : valueAsNumber
     const clamped = Math.min(Math.max(raw, 0), ONE_MINUTE - 1)
-    setInputSeconds(Math.floor(clamped))
+    applyInputValues(inputHours, inputMinutes, clamped)
   }
 
   const handleInputsCommit = () => {
     if (isRunning) return
-    commitInputValues(inputMinutes, inputSeconds)
+    applyInputValues(inputHours, inputMinutes, inputSeconds)
   }
 
   const handleToggle = () => {
@@ -483,6 +607,7 @@ export function TomatoTimer() {
       setSelectedCategoryId(category.id)
       setNewCategoryLabel('')
       setNewTodoCategoryId((current) => current ?? category.id)
+      setNewDailyTodoCategoryId((current) => current ?? category.id)
     } catch (error) {
       toaster.create({
         title: '新增分類失敗',
@@ -530,9 +655,29 @@ export function TomatoTimer() {
         return
       }
 
-      setCategories((prev) => prev.filter((category) => category.id !== id))
-      setSelectedCategoryId((current) => (current === id ? null : current))
+      const nextCategories = categories.filter((category) => category.id !== id)
+      const fallbackCategoryId = nextCategories[0]?.id ?? null
+      setCategories(nextCategories)
+      setSelectedCategoryId((current) =>
+        current === id ? fallbackCategoryId : current,
+      )
       setActiveCategoryId((current) => (current === id ? null : current))
+      setNewTodoCategoryId((current) =>
+        current === id ? fallbackCategoryId : current,
+      )
+      setNewDailyTodoCategoryId((current) =>
+        current === id ? fallbackCategoryId : current,
+      )
+      setTodos((prev) =>
+        prev.map((todo) =>
+          todo.categoryId === id ? { ...todo, categoryId: null } : todo,
+        ),
+      )
+      setDailyTodos((prev) =>
+        prev.map((todo) =>
+          todo.categoryId === id ? { ...todo, categoryId: null } : todo,
+        ),
+      )
     } catch (error) {
       toaster.create({
         title: '刪除分類失敗',
@@ -542,6 +687,65 @@ export function TomatoTimer() {
     } finally {
       setDeletingCategoryId(null)
     }
+  }
+
+  const handleAddDailyTodo = () => {
+    const trimmed = newDailyTodoTitle.trim()
+    if (!trimmed || !newDailyTodoCategoryId) return
+
+    const categorySnapshot = getCategorySnapshot(newDailyTodoCategoryId)
+    const now = new Date()
+    const todo = {
+      id: `daily-${now.getTime()}-${Math.random().toString(16).slice(2)}`,
+      title: trimmed,
+      categoryId: newDailyTodoCategoryId,
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+      completedOn: null,
+    }
+
+    setDailyTodos((prev) => [todo, ...prev])
+    setNewDailyTodoTitle('')
+
+    logEvent(
+      'daily-todo-add',
+      {
+        todoTitle: trimmed,
+        ...categorySnapshot,
+      },
+      { sessionKey: sessionKeyRef.current ?? undefined },
+    )
+  }
+
+  const handleToggleDailyTodo = (id) => {
+    const target = dailyTodos.find((todo) => todo.id === id)
+    if (!target) return
+
+    const hasCompletedToday = target.completedOn === todayKey
+    const categorySnapshot = getCategorySnapshot(target.categoryId)
+    const updatedAt = new Date().toISOString()
+    const nextCompletedOn = hasCompletedToday ? null : todayKey
+
+    logEvent(
+      hasCompletedToday ? 'daily-todo-reset' : 'daily-todo-complete',
+      {
+        todoTitle: target.title,
+        ...categorySnapshot,
+      },
+      { sessionKey: sessionKeyRef.current ?? undefined },
+    )
+
+    setDailyTodos((prev) =>
+      prev.map((todo) =>
+        todo.id === id
+          ? {
+              ...todo,
+              completedOn: nextCompletedOn,
+              updatedAt,
+            }
+          : todo,
+      ),
+    )
   }
 
   const handleAddTodo = () => {
@@ -622,6 +826,14 @@ export function TomatoTimer() {
     (!isRunning &&
       (!selectedCategoryId || secondsLeft <= 0 || isLoadingCategories)) ||
     false
+  const pendingDailyTodos = useMemo(
+    () => dailyTodos.filter((todo) => todo.completedOn !== todayKey),
+    [dailyTodos, todayKey],
+  )
+  const completedDailyTodos = useMemo(
+    () => dailyTodos.filter((todo) => todo.completedOn === todayKey),
+    [dailyTodos, todayKey],
+  )
   const pendingTodos = todos.filter((todo) => !todo.completed)
   const completedTodos = todos
     .filter((todo) => todo.completed)
@@ -649,6 +861,8 @@ export function TomatoTimer() {
         maxH='100%'
         minH='0'
         overflowY='auto'
+      
+        order={{ base: 1, lg: 1 }}
       >
         <Stack gap='6'>
           <Stack gap='2' align='center'>
@@ -685,7 +899,7 @@ export function TomatoTimer() {
                 重置
               </Button>
             </ButtonGroup>
-            <Accordion.Root width='full' maxW='64' collapsible>
+            <Accordion.Root width='full' maxW='100' collapsible>
               <Accordion.Item value='time'>
                 <Box borderWidth='1px' borderRadius='lg' overflow='hidden'>
                   <Accordion.ItemTrigger px='4' py='3'>
@@ -701,14 +915,46 @@ export function TomatoTimer() {
                       <HStack gap='3' justify='center'>
                         <Stack align='center' gap='1'>
                           <Text fontSize='xs' color='fg.muted'>
+                            小時
+                          </Text>
+                          <NumberInput.Root
+                            width='28'
+                            value={String(inputHours)}
+                            onValueChange={handleHoursChange}
+                            min={0}
+                            max={MAX_TOTAL_HOURS}
+                            keepWithinRange={false}
+                            clampValueOnBlur={false}
+                            disabled={isRunning}
+                          >
+                            <NumberInput.Control />
+                            <NumberInput.Input
+                              textAlign='center'
+                              onBlur={handleInputsCommit}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  event.preventDefault()
+                                  event.currentTarget.blur()
+                                }
+                              }}
+                              inputMode='numeric'
+                              pattern='[0-9]*'
+                            />
+                          </NumberInput.Root>
+                        </Stack>
+                        <Text fontSize='lg' fontWeight='medium' color='fg.muted'>
+                          :
+                        </Text>
+                        <Stack align='center' gap='1'>
+                          <Text fontSize='xs' color='fg.muted'>
                             分鐘
                           </Text>
                           <NumberInput.Root
-                            width='24'
+                            width='28'
                             value={String(inputMinutes)}
                             onValueChange={handleMinutesChange}
                             min={0}
-                            max={999}
+                            max={59}
                             keepWithinRange={false}
                             clampValueOnBlur={false}
                             disabled={isRunning}
@@ -736,7 +982,7 @@ export function TomatoTimer() {
                             秒
                           </Text>
                           <NumberInput.Root
-                            width='24'
+                            width='28'
                             value={String(inputSeconds)}
                             onValueChange={handleSecondsChange}
                             min={0}
@@ -765,7 +1011,7 @@ export function TomatoTimer() {
                         <Button
                           leftIcon={<LuMinus />}
                           onClick={() => handleAdjust(-1)}
-                          isDisabled={isRunning || secondsLeft <= 0}
+                          isDisabled={isRunning || secondsLeft < ONE_HOUR}
                           variant='outline'
                           size='sm'
                           _disabled={{
@@ -775,7 +1021,7 @@ export function TomatoTimer() {
                             borderColor: 'gray.300',
                           }}
                         >
-                          -1 分鐘
+                          -1 小時
                         </Button>
                         <Button
                           rightIcon={<LuPlus />}
@@ -790,7 +1036,7 @@ export function TomatoTimer() {
                             borderColor: 'gray.300',
                           }}
                         >
-                          +1 分鐘
+                          +1 小時
                         </Button>
                       </HStack>
                     </Stack>
@@ -892,108 +1138,120 @@ export function TomatoTimer() {
                   </Accordion.ItemContent>
                 </Box>
               </Accordion.Item>
-              <Accordion.Item value='todo'>
+              <Accordion.Item value='daily-create'>
                 <Box borderWidth='1px' borderRadius='lg' overflow='hidden'>
                   <Accordion.ItemTrigger px='4' py='3'>
                     <HStack justify='space-between' flex='1'>
                       <Text fontSize='sm' fontWeight='medium'>
-                        TODO 清單
+                        新增每日任務
                       </Text>
                       <Accordion.ItemIndicator />
                     </HStack>
                   </Accordion.ItemTrigger>
                   <Accordion.ItemContent px='4' pb='4'>
                     <Stack gap='3'>
-                      <Stack gap='2'>
-                        <Input
-                          size='sm'
-                          placeholder='新增待辦事項'
-                          value={newTodoTitle}
-                          onChange={(event) => setNewTodoTitle(event.target.value)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                              event.preventDefault()
-                              handleAddTodo()
-                            }
-                          }}
-                        />
-                        {categories.length > 0 ? (
-                          <Box maxHeight='32' overflowY='auto' pr='1'>
-                            <Wrap justify='center' spacing='2'>
-                              {categories.map((category) => (
-                                <WrapItem key={category.id}>
-                                  <Tag.Root
-                                    variant={
-                                      category.id === newTodoCategoryId
-                                        ? 'solid'
-                                        : 'subtle'
-                                    }
-                                    colorPalette='purple'
-                                    cursor='pointer'
-                                    onClick={() => setNewTodoCategoryId(category.id)}
-                                  >
-                                    <Tag.Label>{category.label}</Tag.Label>
-                                  </Tag.Root>
-                                </WrapItem>
-                              ))}
-                            </Wrap>
-                          </Box>
-                        ) : (
-                          <Text fontSize='sm' color='fg.muted' textAlign='center'>
-                            請先建立工作類別以指派待辦。
-                          </Text>
-                        )}
-                        <Button
-                          size='sm'
-                          variant='outline'
-                          onClick={handleAddTodo}
-                          isDisabled={!newTodoTitle.trim() || !newTodoCategoryId}
-                        >
-                          新增待辦
-                        </Button>
-                      </Stack>
-                      <Stack gap='2'>
-                        {pendingTodos.length === 0 ? (
-                          <Text fontSize='sm' color='fg.muted' textAlign='center'>
-                            尚未新增待辦事項。
-                          </Text>
-                        ) : (
-                          pendingTodos.map((todo) => {
-                            const category = getCategorySnapshot(todo.categoryId)
-                            return (
-                              <HStack
-                                key={todo.id}
-                                justify='space-between'
-                                borderWidth='1px'
-                                borderRadius='md'
-                                px='3'
-                                py='2'
-                              >
-                                <Stack gap='0'>
-                                  <Text
-                                    fontSize='sm'
-                                    textDecoration='none'
-                                    color='fg'
-                                  >
-                                    {todo.title}
-                                  </Text>
-                                  <Text fontSize='xs' color='fg.muted'>
-                                    類別：{category.categoryLabel}
-                                  </Text>
-                                </Stack>
-                                <Button
-                                  size='xs'
-                                  variant='solid'
-                                  colorScheme='teal'
-                                  onClick={() => handleToggleTodo(todo.id)}
+                      <Input
+                        size='sm'
+                        placeholder='輸入每日任務內容'
+                        value={newDailyTodoTitle}
+                        onChange={(event) => setNewDailyTodoTitle(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault()
+                            handleAddDailyTodo()
+                          }
+                        }}
+                      />
+                      {categories.length > 0 ? (
+                        <Box maxHeight='32' overflowY='auto' pr='1'>
+                          <Wrap justify='center' spacing='2'>
+                            {categories.map((category) => (
+                              <WrapItem key={category.id}>
+                                <Tag.Root
+                                  variant={
+                                    category.id === newDailyTodoCategoryId ? 'solid' : 'subtle'
+                                  }
+                                  colorPalette='pink'
+                                  cursor='pointer'
+                                  onClick={() => setNewDailyTodoCategoryId(category.id)}
                                 >
-                                  完成
-                                </Button>
-                              </HStack>
-                            )
-                          })
-                        )}
-                      </Stack>
+                                  <Tag.Label>{category.label}</Tag.Label>
+                                </Tag.Root>
+                              </WrapItem>
+                            ))}
+                          </Wrap>
+                        </Box>
+                      ) : (
+                        <Text fontSize='sm' color='fg.muted' textAlign='center'>
+                          請先建立工作類別再新增每日任務。
+                        </Text>
+                      )}
+                      <Button
+                        size='sm'
+                        variant='outline'
+                        onClick={handleAddDailyTodo}
+                        isDisabled={!newDailyTodoTitle.trim() || !newDailyTodoCategoryId}
+                      >
+                        建立即日任務
+                      </Button>
+                    </Stack>
+                  </Accordion.ItemContent>
+                </Box>
+              </Accordion.Item>
+              <Accordion.Item value='todo-create'>
+                <Box borderWidth='1px' borderRadius='lg' overflow='hidden'>
+                  <Accordion.ItemTrigger px='4' py='3'>
+                    <HStack justify='space-between' flex='1'>
+                      <Text fontSize='sm' fontWeight='medium'>
+                        新增待辦事項
+                      </Text>
+                      <Accordion.ItemIndicator />
+                    </HStack>
+                  </Accordion.ItemTrigger>
+                  <Accordion.ItemContent px='4' pb='4'>
+                    <Stack gap='3'>
+                      <Input
+                        size='sm'
+                        placeholder='輸入待辦事項'
+                        value={newTodoTitle}
+                        onChange={(event) => setNewTodoTitle(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault()
+                            handleAddTodo()
+                          }
+                        }}
+                      />
+                      {categories.length > 0 ? (
+                        <Box maxHeight='32' overflowY='auto' pr='1'>
+                          <Wrap justify='center' spacing='2'>
+                            {categories.map((category) => (
+                              <WrapItem key={category.id}>
+                                <Tag.Root
+                                  variant={category.id === newTodoCategoryId ? 'solid' : 'subtle'}
+                                  colorPalette='purple'
+                                  cursor='pointer'
+                                  onClick={() => setNewTodoCategoryId(category.id)}
+                                >
+                                  <Tag.Label>{category.label}</Tag.Label>
+                                </Tag.Root>
+                              </WrapItem>
+                            ))}
+                          </Wrap>
+                        </Box>
+                      ) : (
+                        <Text fontSize='sm' color='fg.muted' textAlign='center'>
+                          請先建立工作類別再新增待辦事項。
+                        </Text>
+                      )}
+                      <Button
+                        size='sm'
+                        variant='outline'
+                        onClick={handleAddTodo}
+                        isDisabled={!newTodoTitle.trim() || !newTodoCategoryId}
+                      >
+                        建立待辦事項
+                      </Button>
                     </Stack>
                   </Accordion.ItemContent>
                 </Box>
@@ -1019,6 +1277,7 @@ export function TomatoTimer() {
         maxH='100%'
         minH='0'
         overflowY='auto'
+        order={{ base: 2, lg: 2 }}
       >
         <Stack gap='6'>
           <Stack align='center' gap='3'>
@@ -1067,120 +1326,7 @@ export function TomatoTimer() {
             </HStack>
           </Stack>
           <Stack gap='3'>
-            <Text fontSize='sm' color='fg.muted'>
-              待辦清單
-            </Text>
-            {pendingTodos.length === 0 ? (
-              <Text fontSize='sm' color='fg.muted'>
-                目前沒有待辦事項。
-              </Text>
-            ) : (
-              <Stack gap='2' maxHeight='40' overflowY='auto' pr='1'>
-                {pendingTodos.map((todo) => {
-                  const category = getCategorySnapshot(todo.categoryId)
-                  return (
-                    <HStack
-                      key={todo.id}
-                      justify='space-between'
-                      borderWidth='1px'
-                      borderRadius='md'
-                      px='3'
-                      py='2'
-                    >
-                      <Stack gap='0'>
-                        <Text fontSize='sm'>{todo.title}</Text>
-                        <Text fontSize='xs' color='fg.muted'>
-                          類別：{category.categoryLabel}
-                        </Text>
-                      </Stack>
-                      <Button
-                        size='xs'
-                        variant='solid'
-                        colorScheme='teal'
-                        onClick={() => handleToggleTodo(todo.id)}
-                      >
-                        完成
-                      </Button>
-                    </HStack>
-                  )
-                })}
-              </Stack>
-            )}
-          </Stack>
-          <Stack gap='3'>
-            <Text fontSize='sm' color='fg.muted'>
-              待辦完成紀錄
-            </Text>
-            {completedTodos.length === 0 ? (
-              <Text fontSize='sm' color='fg.muted'>
-                還沒有完成的待辦。
-              </Text>
-            ) : (
-              <Stack gap='2' maxHeight='40' overflowY='auto' pr='1'>
-                {completedTodos.map((todo) => {
-                  const category = getCategorySnapshot(todo.categoryId)
-                  return (
-                    <HStack
-                      key={todo.id}
-                      justify='space-between'
-                      borderWidth='1px'
-                      borderRadius='md'
-                      px='3'
-                      py='2'
-                      bg='bg.subtle'
-                    >
-                      <Stack gap='0'>
-                        <Text fontSize='sm' color='fg'>
-                          {todo.title}
-                        </Text>
-                        <Text fontSize='xs' color='fg.muted'>
-                          類別：{category.categoryLabel}
-                        </Text>
-                        <Text fontSize='xs' color='fg.muted'>
-                          完成於：
-                          {todo.completedAt
-                            ? formatTimeOfDay(todo.completedAt)
-                            : '—'}
-                        </Text>
-                      </Stack>
-                      <Button
-                        size='xs'
-                        variant='outline'
-                        colorScheme='gray'
-                        onClick={() => handleToggleTodo(todo.id)}
-                      >
-                        還原
-                      </Button>
-                    </HStack>
-                  )
-                })}
-              </Stack>
-            )}
-          </Stack>
-          <Text fontSize='sm' color='fg.muted'>
-            點擊開始後會自動記錄預計完成時間；完成後可參考這裡做工作紀錄。
-          </Text>
-        </Stack>
-      </Box>
-
-      <Box
-        borderWidth='1px'
-        borderRadius='xl'
-        padding={{ base: '6', md: '8' }}
-        width='full'
-        maxW={{ base: 'full', lg: 'sm' }}
-        background='bg.subtle'
-        boxShadow='sm'
-        flex={{ base: 'none', lg: '1' }}
-        maxH='100%'
-        minH='0'
-        overflowY='auto'
-      >
-        <Stack gap='6'>
-          <Stack align='center' gap='3'>
-            <Heading size='md'>操作紀錄</Heading>
-          </Stack>
-          <Stack gap='3'>
+            <Heading size='sm'>操作紀錄</Heading>
             <Stack gap='3' maxHeight='56' overflowY='auto' paddingEnd='1'>
               {eventLog.length === 0 ? (
                 <Text fontSize='sm' color='fg.muted'>
@@ -1212,6 +1358,21 @@ export function TomatoTimer() {
                       label: '還原待辦',
                       icon: LuRotateCcw,
                       color: 'gray',
+                    },
+                    'daily-todo-add': {
+                      label: '新增每日任務',
+                      icon: LuClipboardList,
+                      color: 'pink',
+                    },
+                    'daily-todo-complete': {
+                      label: '完成每日任務',
+                      icon: LuCheck,
+                      color: 'pink',
+                    },
+                    'daily-todo-reset': {
+                      label: '重置每日任務',
+                      icon: LuRotateCcw,
+                      color: 'pink',
                     },
                   }
                   const meta =
@@ -1245,6 +1406,12 @@ export function TomatoTimer() {
                     detail = `完成 ${event.todoTitle}`
                   } else if (event.type === 'todo-reopen') {
                     detail = `重新開啟 ${event.todoTitle}`
+                  } else if (event.type === 'daily-todo-add') {
+                    detail = `新增每日任務 ${event.todoTitle}`
+                  } else if (event.type === 'daily-todo-complete') {
+                    detail = `完成今日每日任務 ${event.todoTitle}`
+                  } else if (event.type === 'daily-todo-reset') {
+                    detail = `重新開始每日任務 ${event.todoTitle}`
                   }
 
                   return (
@@ -1279,10 +1446,210 @@ export function TomatoTimer() {
               )}
             </Stack>
           </Stack>
-          
-      
         </Stack>
       </Box>
+
+      <Box
+        borderWidth='1px'
+        borderRadius='xl'
+        padding={{ base: '6', md: '8' }}
+        width='full'
+        maxW={{ base: 'full', lg: 'sm' }}
+        background='bg.surface'
+        boxShadow='sm'
+        flex={{ base: 'none', lg: '1' }}
+        maxH='100%'
+        minH='0'
+        overflowY='auto'
+        order={{ base: 3, lg: 3 }}
+      >
+        <Stack gap='6'>
+          <Stack align='center' gap='2'>
+            <Heading size='md'>每日任務與待辦執行</Heading>
+            <Text fontSize='sm' color='fg.muted'>
+              在這裡勾選完成或重置每日任務與待辦事項。
+            </Text>
+          </Stack>
+          <Stack gap='5'>
+            <Stack gap='3'>
+              <Heading size='sm'>今日每日任務</Heading>
+              <Stack gap='2'>
+                <Text fontSize='xs' color='fg.muted'>
+                  待完成
+                </Text>
+                {pendingDailyTodos.length === 0 ? (
+                  <Text fontSize='sm' color='fg.muted' textAlign='center'>
+                    今日任務都完成了，太棒了！
+                  </Text>
+                ) : (
+                  pendingDailyTodos.map((todo) => {
+                    const category = getCategorySnapshot(todo.categoryId)
+                    return (
+                      <HStack
+                        key={todo.id}
+                        justify='space-between'
+                        borderWidth='1px'
+                        borderRadius='md'
+                        px='3'
+                        py='2'
+                      >
+                        <Stack gap='0'>
+                          <Text fontSize='sm'>{todo.title}</Text>
+                          <Text fontSize='xs' color='fg.muted'>
+                            類別：{category.categoryLabel}
+                          </Text>
+                        </Stack>
+                        <Button
+                          size='xs'
+                          variant='solid'
+                          colorScheme='teal'
+                          onClick={() => handleToggleDailyTodo(todo.id)}
+                        >
+                          完成今日
+                        </Button>
+                      </HStack>
+                    )
+                  })
+                )}
+              </Stack>
+              <Stack gap='2'>
+                <Text fontSize='xs' color='fg.muted'>
+                  今日已完成
+                </Text>
+                {completedDailyTodos.length === 0 ? (
+                  <Text fontSize='sm' color='fg.muted' textAlign='center'>
+                    還沒有完成的每日任務。
+                  </Text>
+                ) : (
+                  completedDailyTodos.map((todo) => {
+                    const category = getCategorySnapshot(todo.categoryId)
+                    const completedAtLabel = todo.updatedAt
+                      ? formatTimeOfDay(new Date(todo.updatedAt))
+                      : '--:--:--'
+                    return (
+                      <HStack
+                        key={todo.id}
+                        justify='space-between'
+                        borderWidth='1px'
+                        borderRadius='md'
+                        px='3'
+                        py='2'
+                        bg='teal.50'
+                      >
+                        <Stack gap='0'>
+                          <Text fontSize='sm' color='teal.700'>
+                            {todo.title}
+                          </Text>
+                          <Text fontSize='xs' color='teal.600'>
+                            類別：{category.categoryLabel} · 完成時間：{completedAtLabel}
+                          </Text>
+                        </Stack>
+                        <Button
+                          size='xs'
+                          variant='outline'
+                          colorScheme='teal'
+                          onClick={() => handleToggleDailyTodo(todo.id)}
+                        >
+                          重新開始
+                        </Button>
+                      </HStack>
+                    )
+                  })
+                )}
+              </Stack>
+            </Stack>
+            <Stack gap='3'>
+              <Heading size='sm'>待辦事項</Heading>
+              <Stack gap='2'>
+                <Text fontSize='xs' color='fg.muted'>
+                  待完成
+                </Text>
+                {pendingTodos.length === 0 ? (
+                  <Text fontSize='sm' color='fg.muted' textAlign='center'>
+                    尚未新增待辦事項。
+                  </Text>
+                ) : (
+                  pendingTodos.map((todo) => {
+                    const category = getCategorySnapshot(todo.categoryId)
+                    return (
+                      <HStack
+                        key={todo.id}
+                        justify='space-between'
+                        borderWidth='1px'
+                        borderRadius='md'
+                        px='3'
+                        py='2'
+                      >
+                        <Stack gap='0'>
+                          <Text fontSize='sm'>{todo.title}</Text>
+                          <Text fontSize='xs' color='fg.muted'>
+                            類別：{category.categoryLabel}
+                          </Text>
+                        </Stack>
+                        <Button
+                          size='xs'
+                          variant='solid'
+                          colorScheme='teal'
+                          onClick={() => handleToggleTodo(todo.id)}
+                        >
+                          完成
+                        </Button>
+                      </HStack>
+                    )
+                  })
+                )}
+              </Stack>
+              <Stack gap='2'>
+                <Text fontSize='xs' color='fg.muted'>
+                  已完成
+                </Text>
+                {completedTodos.length === 0 ? (
+                  <Text fontSize='sm' color='fg.muted' textAlign='center'>
+                    還沒有完成的待辦。
+                  </Text>
+                ) : (
+                  completedTodos.map((todo) => {
+                    const category = getCategorySnapshot(todo.categoryId)
+                    return (
+                      <HStack
+                        key={todo.id}
+                        justify='space-between'
+                        borderWidth='1px'
+                        borderRadius='md'
+                        px='3'
+                        py='2'
+                        bg='bg.subtle'
+                      >
+                        <Stack gap='0'>
+                          <Text fontSize='sm' color='fg'>
+                            {todo.title}
+                          </Text>
+                          <Text fontSize='xs' color='fg.muted'>
+                            類別：{category.categoryLabel}
+                          </Text>
+                          <Text fontSize='xs' color='fg.muted'>
+                            完成於：
+                            {todo.completedAt ? formatTimeOfDay(todo.completedAt) : '—'}
+                          </Text>
+                        </Stack>
+                        <Button
+                          size='xs'
+                          variant='outline'
+                          colorScheme='gray'
+                          onClick={() => handleToggleTodo(todo.id)}
+                        >
+                          還原
+                        </Button>
+                      </HStack>
+                    )
+                  })
+                )}
+              </Stack>
+            </Stack>
+          </Stack>
+        </Stack>
+      </Box>
+
     </Stack>
   )
 }

@@ -19,6 +19,7 @@ import { Tooltip } from '../ui/tooltip.jsx'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 
 const DEFAULT_RANGE_DAYS = 7
+const ONE_HOUR = 60 * 60
 
 const locales = {
   'zh-TW': zhTW,
@@ -65,7 +66,7 @@ export function TimelineDashboard() {
     return {
       from: formatDateInput(start),
       to: formatDateInput(end),
-      minMinutes: '0',
+      minHours: '0',
     }
   })
 
@@ -90,7 +91,7 @@ export function TimelineDashboard() {
         const fromDate = filters.from ? startOfDay(filters.from) : null
         const toDate = filters.to ? endOfDay(filters.to) : null
         const minDurationSeconds =
-          Number(filters.minMinutes) > 0 ? Number(filters.minMinutes) * 60 : undefined
+          Number(filters.minHours) > 0 ? Number(filters.minHours) * ONE_HOUR : undefined
 
         const [sessionsResp, eventsResp] = await Promise.all([
           fetchSessions({
@@ -126,10 +127,10 @@ export function TimelineDashboard() {
     load()
   }, [filters, isAuthenticated, token])
 
-  const totalMinutes = useMemo(() => {
+  const totalHours = useMemo(() => {
     if (!sessions.length) return 0
     const seconds = sessions.reduce((acc, session) => acc + (session.durationSeconds ?? 0), 0)
-    return Math.round((seconds / 60) * 10) / 10
+    return Math.round((seconds / ONE_HOUR) * 10) / 10
   }, [sessions])
 
   const completedCount = useMemo(
@@ -220,12 +221,12 @@ export function TimelineDashboard() {
     const label = (() => {
       if (event.type === 'session') {
         const { raw } = event
-        const duration = Math.round((raw.durationSeconds ?? 0) / 60)
+        const durationHours = Math.round(((raw.durationSeconds ?? 0) / ONE_HOUR) * 10) / 10
         const startedAt = raw.startedAt ? new Date(raw.startedAt) : null
         const completedAt = raw.completedAt ? new Date(raw.completedAt) : null
         const startedLabel = startedAt ? `${format(startedAt, 'yyyy/MM/dd HH:mm')}` : '未知'
         const completedLabel = completedAt ? `${format(completedAt, 'yyyy/MM/dd HH:mm')}` : '未完成'
-        return `${raw.categoryLabel ?? '番茄鐘'}\n開始：${startedLabel}\n結束：${completedLabel}\n時長：約 ${duration} 分鐘`
+        return `${raw.categoryLabel ?? '番茄鐘'}\n開始：${startedLabel}\n結束：${completedLabel}\n時長：約 ${durationHours} 小時`
       }
 
       const { raw } = event
@@ -310,13 +311,13 @@ export function TimelineDashboard() {
         </Stack>
         <Stack gap='2'>
           <Text fontSize='sm' fontWeight='semibold'>
-            最短時長 (分鐘)
+            最短時長 (小時)
           </Text>
           <Input
             type='number'
             min='0'
-            value={filters.minMinutes}
-            onChange={handleFilterChange('minMinutes')}
+            value={filters.minHours}
+            onChange={handleFilterChange('minHours')}
           />
         </Stack>
         <Stack gap='2' justify='flex-end'>
@@ -342,7 +343,7 @@ export function TimelineDashboard() {
           <Text fontSize='sm' color='fg.muted'>
             累積專注時間
           </Text>
-          <Heading size='lg'>{totalMinutes} 分鐘</Heading>
+          <Heading size='lg'>{totalHours} 小時</Heading>
         </Box>
         <Box borderWidth='1px' borderRadius='md' p='4'>
           <Text fontSize='sm' color='fg.muted'>
@@ -380,7 +381,7 @@ export function TimelineDashboard() {
           }}
           tooltipAccessor={(event) => {
             if (event.type === 'session') {
-              return `${event.raw.categoryLabel ?? '番茄鐘'}\n時長：${Math.round((event.raw.durationSeconds ?? 0) / 60)} 分鐘`
+              return `${event.raw.categoryLabel ?? '番茄鐘'}\n時長：${Math.round(((event.raw.durationSeconds ?? 0) / ONE_HOUR) * 10) / 10} 小時`
             }
             return `${event.title}\n${event.raw.sessionKey ?? ''}`
           }}
