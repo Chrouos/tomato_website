@@ -181,6 +181,43 @@ const definition = {
           },
         },
       },
+      Category: {
+        type: 'object',
+        properties: {
+          id: {
+            type: 'string',
+          },
+          userId: {
+            type: 'string',
+            format: 'uuid',
+            nullable: true,
+          },
+          label: {
+            type: 'string',
+          },
+          isDefault: {
+            type: 'boolean',
+          },
+          createdAt: {
+            type: 'string',
+            format: 'date-time',
+          },
+          updatedAt: {
+            type: 'string',
+            format: 'date-time',
+          },
+        },
+      },
+      NewCategory: {
+        type: 'object',
+        required: ['label'],
+        properties: {
+          label: {
+            type: 'string',
+            description: '分類名稱',
+          },
+        },
+      },
     },
     securitySchemes: {
       bearerAuth: {

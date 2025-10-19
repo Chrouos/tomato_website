@@ -100,6 +100,25 @@ export const createEvent = ({ token, event }) =>
     body: event,
   });
 
+export const fetchCategories = ({ token } = {}) =>
+  apiRequest('/categories', {
+    method: 'GET',
+    token,
+  });
+
+export const createCategory = ({ token, label }) =>
+  apiRequest('/categories', {
+    method: 'POST',
+    token,
+    body: { label },
+  });
+
+export const deleteCategory = ({ token, categoryId }) =>
+  apiRequest(`/categories/${encodeURIComponent(categoryId)}`, {
+    method: 'DELETE',
+    token,
+  });
+
 export default {
   requestEmailVerificationCode,
   registerWithEmail,
@@ -109,4 +128,7 @@ export default {
   fetchSessions,
   fetchEvents,
   createEvent,
+  fetchCategories,
+  createCategory,
+  deleteCategory,
 };

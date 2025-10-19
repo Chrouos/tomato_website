@@ -28,18 +28,17 @@ import {
   LuRotateCcw,
 } from 'react-icons/lu'
 import { useAuth } from '../lib/auth-context.jsx'
-import { createEvent, createSession } from '../lib/api.js'
+import {
+  createEvent,
+  createSession,
+  fetchCategories,
+  createCategory as createCategoryApi,
+  deleteCategory as deleteCategoryApi,
+} from '../lib/api.js'
 import { toaster } from './ui/toaster.jsx'
 
 const ONE_MINUTE = 60
 const INITIAL_MINUTES = 25
-const DEFAULT_CATEGORIES = [
-  { id: 'deep-work', label: '深度工作' },
-  { id: 'learning', label: '學習' },
-  { id: 'meeting', label: '會議/討論' },
-  { id: 'break', label: '安排休息' },
-]
-
 function formatTime(totalSeconds) {
   const minutes = Math.floor(totalSeconds / 60)
   const seconds = totalSeconds % 60
@@ -72,22 +71,21 @@ export function TomatoTimer() {
   )
   const [sessionStart, setSessionStart] = useState(null)
   const [sessionEnd, setSessionEnd] = useState(null)
-  const [categories, setCategories] = useState(DEFAULT_CATEGORIES)
-  const [selectedCategoryId, setSelectedCategoryId] = useState(
-    DEFAULT_CATEGORIES[0]?.id ?? null,
-  )
+  const [categories, setCategories] = useState([])
+  const [selectedCategoryId, setSelectedCategoryId] = useState(null)
   const [activeCategoryId, setActiveCategoryId] = useState(null)
   const [newCategoryLabel, setNewCategoryLabel] = useState('')
   const [todos, setTodos] = useState([])
   const [newTodoTitle, setNewTodoTitle] = useState('')
-  const [newTodoCategoryId, setNewTodoCategoryId] = useState(
-    DEFAULT_CATEGORIES[0]?.id ?? null,
-  )
+  const [newTodoCategoryId, setNewTodoCategoryId] = useState(null)
   const eventId = useRef(0)
   const [eventLog, setEventLog] = useState([])
   const [, setIsSyncingSession] = useState(false)
   const lastSyncedKeyRef = useRef(null)
   const sessionKeyRef = useRef(null)
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true)
+  const [isSavingCategory, setIsSavingCategory] = useState(false)
+  const [deletingCategoryId, setDeletingCategoryId] = useState(null)
 
   const generateSessionKey = useCallback(() => {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -219,6 +217,42 @@ export function TomatoTimer() {
     },
     [isAuthenticated, token, sessionStart],
   )
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadCategories = async () => {
+      setIsLoadingCategories(true)
+      try {
+        const response = await fetchCategories({
+          token: isAuthenticated && token ? token : undefined,
+        })
+        if (cancelled) return
+
+        const items = Array.isArray(response?.items) ? response.items : []
+        setCategories(items)
+      } catch (error) {
+        if (!cancelled) {
+          setCategories([])
+          toaster.create({
+            title: '載入分類失敗',
+            description: error.message,
+            type: 'error',
+          })
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingCategories(false)
+        }
+      }
+    }
+
+    loadCategories()
+
+    return () => {
+      cancelled = true
+    }
+  }, [isAuthenticated, token])
 
   useEffect(() => {
     if (categories.length === 0) {
@@ -428,26 +462,86 @@ export function TomatoTimer() {
     setIsRunning(true)
   }
 
-  const handleAddCategory = () => {
+  const handleAddCategory = async () => {
     const trimmed = newCategoryLabel.trim()
     if (!trimmed) return
+    if (!isAuthenticated || !token) {
+      toaster.create({
+        title: '請先登入後再新增分類',
+        type: 'info',
+      })
+      return
+    }
 
-    const slug = trimmed
-      .toLowerCase()
-      .replace(/[^a-z0-9\u4e00-\u9fa5\s-]/gi, '')
-      .replace(/\s+/g, '-')
-    const id = `${slug || 'category'}-${Date.now()}`
-    const nextCategory = { id, label: trimmed }
-    setCategories((prev) => [...prev, nextCategory])
-    setSelectedCategoryId(id)
-    setNewCategoryLabel('')
+    setIsSavingCategory(true)
+    try {
+      const category = await createCategoryApi({
+        token,
+        label: trimmed,
+      })
+      setCategories((prev) => [...prev, category])
+      setSelectedCategoryId(category.id)
+      setNewCategoryLabel('')
+      setNewTodoCategoryId((current) => current ?? category.id)
+    } catch (error) {
+      toaster.create({
+        title: '新增分類失敗',
+        description: error.message,
+        type: 'error',
+      })
+    } finally {
+      setIsSavingCategory(false)
+    }
   }
 
-  const handleRemoveCategory = (id) => {
+  const handleRemoveCategory = async (id) => {
     if (isRunning) return
-    setCategories((prev) => prev.filter((category) => category.id !== id))
-    setSelectedCategoryId((current) => (current === id ? null : current))
-    setActiveCategoryId((current) => (current === id ? null : current))
+    const target = categories.find((category) => category.id === id)
+    if (!target) return
+
+    if (target.isDefault) {
+      toaster.create({
+        title: '預設分類不可刪除',
+        type: 'info',
+      })
+      return
+    }
+
+    if (!isAuthenticated || !token) {
+      toaster.create({
+        title: '請先登入後再刪除分類',
+        type: 'info',
+      })
+      return
+    }
+
+    setDeletingCategoryId(id)
+    try {
+      const deleted = await deleteCategoryApi({
+        token,
+        categoryId: id,
+      })
+
+      if (!deleted) {
+        toaster.create({
+          title: '找不到分類',
+          type: 'error',
+        })
+        return
+      }
+
+      setCategories((prev) => prev.filter((category) => category.id !== id))
+      setSelectedCategoryId((current) => (current === id ? null : current))
+      setActiveCategoryId((current) => (current === id ? null : current))
+    } catch (error) {
+      toaster.create({
+        title: '刪除分類失敗',
+        description: error.message,
+        type: 'error',
+      })
+    } finally {
+      setDeletingCategoryId(null)
+    }
   }
 
   const handleAddTodo = () => {
@@ -525,7 +619,9 @@ export function TomatoTimer() {
   ).categoryLabel
   const startButtonLabel = isRunning ? '暫停' : sessionStart ? '繼續' : '開始'
   const isStartDisabled =
-    (!isRunning && (!selectedCategoryId || secondsLeft <= 0)) || false
+    (!isRunning &&
+      (!selectedCategoryId || secondsLeft <= 0 || isLoadingCategories)) ||
+    false
   const pendingTodos = todos.filter((todo) => !todo.completed)
   const completedTodos = todos
     .filter((todo) => todo.completed)
@@ -713,7 +809,11 @@ export function TomatoTimer() {
                   </Accordion.ItemTrigger>
                   <Accordion.ItemContent px='4' pb='4'>
                     <Stack gap='3'>
-                      {categories.length > 0 ? (
+                      {isLoadingCategories ? (
+                        <Text fontSize='sm' color='fg.muted' textAlign='center'>
+                          載入分類中...
+                        </Text>
+                      ) : categories.length > 0 ? (
                         <Box maxHeight='32' overflowY='auto' pr='1'>
                           <Wrap justify='center' spacing='2'>
                             {categories.map((category) => (
@@ -736,10 +836,15 @@ export function TomatoTimer() {
                                   <Tag.Label>{category.label}</Tag.Label>
                                   <Tag.EndElement>
                                     <Tag.CloseTrigger
-                                      disabled={isRunning}
-                                      onClick={(event) => {
+                                      disabled={
+                                        isRunning ||
+                                        category.isDefault ||
+                                        deletingCategoryId === category.id ||
+                                        !isAuthenticated
+                                      }
+                                      onClick={async (event) => {
                                         event.stopPropagation()
-                                        handleRemoveCategory(category.id)
+                                        await handleRemoveCategory(category.id)
                                       }}
                                     />
                                   </Tag.EndElement>
@@ -762,7 +867,9 @@ export function TomatoTimer() {
                           onKeyDown={(event) => {
                             if (event.key === 'Enter') {
                               event.preventDefault()
-                              handleAddCategory()
+                              if (!isSavingCategory) {
+                                handleAddCategory()
+                              }
                             }
                           }}
                           isDisabled={isRunning}
@@ -772,8 +879,11 @@ export function TomatoTimer() {
                           variant='outline'
                           onClick={handleAddCategory}
                           isDisabled={
-                            isRunning || newCategoryLabel.trim() === ''
+                            isRunning ||
+                            newCategoryLabel.trim() === '' ||
+                            isSavingCategory
                           }
+                          isLoading={isSavingCategory}
                         >
                           新增
                         </Button>

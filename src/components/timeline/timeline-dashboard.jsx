@@ -8,7 +8,6 @@ import {
   SimpleGrid,
   Stack,
   Text,
-  Tooltip,
 } from '@chakra-ui/react'
 import { Calendar, Views, dateFnsLocalizer } from 'react-big-calendar'
 import { format, parse, startOfWeek, getDay, addMinutes } from 'date-fns'
@@ -16,6 +15,7 @@ import { zhTW } from 'date-fns/locale'
 import { useAuth } from '../../lib/auth-context.jsx'
 import { fetchEvents, fetchSessions } from '../../lib/api.js'
 import { toaster } from '../ui/toaster.jsx'
+import { Tooltip } from '../ui/tooltip.jsx'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 
 const DEFAULT_RANGE_DAYS = 7
@@ -168,7 +168,7 @@ export function TimelineDashboard() {
 
       items.push({
         id: `session-${session.id}`,
-        title: `${session.categoryLabel ?? '番茄鐘'} · ${Math.round((session.durationSeconds ?? 0) / 60)} 分鐘`,
+        title: `${session.categoryLabel ?? '番茄鐘'}`,
         start,
         end,
         type: 'session',
@@ -182,7 +182,7 @@ export function TimelineDashboard() {
       const end = addMinutes(start, 5)
       items.push({
         id: `event-${event.id}`,
-        title: `${event.eventType}${event.sessionKey ? ` · ${event.sessionKey.slice(0, 6)}` : ''}`,
+        title: `${event.eventType}`,
         start,
         end,
         type: 'event',
@@ -196,51 +196,75 @@ export function TimelineDashboard() {
   const eventPropGetter = useCallback((event) => {
     if (event.type === 'session') {
       return {
+        className: 'timeline-event timeline-event-session',
         style: {
           backgroundColor: '#805AD5',
-          borderRadius: '6px',
           border: 'none',
           color: 'white',
         },
       }
     }
     return {
+      className: 'timeline-event timeline-event-action',
       style: {
         backgroundColor: '#3182CE',
-        borderRadius: '6px',
         border: 'none',
         color: 'white',
-        opacity: 0.85,
+        opacity: 0.9,
       },
     }
   }, [])
 
   const EventComponent = useCallback((eventWrapperProps) => {
-    const { event } = eventWrapperProps
+    const { event, style, className } = eventWrapperProps
     const label = (() => {
       if (event.type === 'session') {
         const { raw } = event
         const duration = Math.round((raw.durationSeconds ?? 0) / 60)
-        const started = raw.startedAt ? new Date(raw.startedAt).toLocaleString() : '未知'
-        const ended = raw.completedAt ? new Date(raw.completedAt).toLocaleString() : '未完成'
-        return `${raw.categoryLabel ?? '番茄鐘'}\n開始：${started}\n結束：${ended}\n時長：約 ${duration} 分鐘`
+        const startedAt = raw.startedAt ? new Date(raw.startedAt) : null
+        const completedAt = raw.completedAt ? new Date(raw.completedAt) : null
+        const startedLabel = startedAt ? `${format(startedAt, 'yyyy/MM/dd HH:mm')}` : '未知'
+        const completedLabel = completedAt ? `${format(completedAt, 'yyyy/MM/dd HH:mm')}` : '未完成'
+        return `${raw.categoryLabel ?? '番茄鐘'}\n開始：${startedLabel}\n結束：${completedLabel}\n時長：約 ${duration} 分鐘`
       }
 
       const { raw } = event
-      const occurred = raw.occurredAt ? new Date(raw.occurredAt).toLocaleString() : '未知'
+      const occurredAt = raw.occurredAt ? new Date(raw.occurredAt) : null
+      const startLabel = occurredAt ? format(occurredAt, 'yyyy/MM/dd HH:mm') : '未知'
+      const endLabel = occurredAt ? format(addMinutes(occurredAt, 5), 'yyyy/MM/dd HH:mm') : '未知'
       const payload = raw.payload && Object.keys(raw.payload).length > 0 ? `\n內容：${JSON.stringify(raw.payload)}` : ''
-      return `${raw.eventType}${raw.sessionKey ? ` (Session: ${raw.sessionKey})` : ''}\n時間：${occurred}${payload}`
+      return `${raw.eventType}${raw.sessionKey ? ` (Session: ${raw.sessionKey})` : ''}\n開始：${startLabel}\n結束：${endLabel}${payload}`
     })()
 
     return (
-      <Tooltip.Root openDelay={150} closeDelay={100} gutter={8} placement='top'>
-        <Tooltip.Trigger asChild>
-          <Box as='span'>{event.title}</Box>
-        </Tooltip.Trigger>
-        <Tooltip.Positioner>
-          <Tooltip.Content whiteSpace='pre-line'>{label}</Tooltip.Content>
-        </Tooltip.Positioner>
-      </Tooltip.Root>
+      <Tooltip
+        showArrow
+        openDelay={150}
+        closeDelay={100}
+        placement='top'
+        content={label}
+        contentProps={{ whiteSpace: 'pre-line' }}
+      >
+        <Box
+          className={className}
+          style={{
+            ...style,
+            borderRadius: '6px',
+            padding: '4px 6px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '2px',
+            fontWeight: 600,
+          }}
+        >
+          <Text fontSize='xs' lineHeight='1'>
+            {format(event.start, 'HH:mm')} - {format(event.end, 'HH:mm')}
+          </Text>
+          <Text fontSize='sm' lineHeight='1.2'>
+            {event.title}
+          </Text>
+        </Box>
+      </Tooltip>
     )
   }, [])
 
@@ -340,6 +364,7 @@ export function TimelineDashboard() {
           step={30}
           defaultDate={defaultDate}
           eventPropGetter={eventPropGetter}
+          dayLayoutAlgorithm='no-overlap'
           components={{
             event: EventComponent,
           }}

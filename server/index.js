@@ -7,7 +7,9 @@ import healthRouter from './routes/health.js';
 import authRouter from './routes/auth.js';
 import sessionsRouter from './routes/sessions.js';
 import eventsRouter from './routes/events.js';
+import categoriesRouter from './routes/categories.js';
 import { getEnv, getEnvNumber } from './config/env.js';
+import { ensureDefaultCategories } from './repositories/categoryRepository.js';
 
 const app = express();
 
@@ -27,13 +29,20 @@ app.use('/health', healthRouter);
 app.use('/auth', authRouter);
 app.use('/sessions', sessionsRouter);
 app.use('/events', eventsRouter);
+app.use('/categories', categoriesRouter);
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true }));
 
 const port = getEnvNumber('SERVER_PORT', 4000);
 
-app.listen(port, () => {
-  console.log(`Tomato API server listening at http://localhost:${port}`);
-  console.log(`Swagger UI available at http://localhost:${port}/docs`);
-});
+ensureDefaultCategories()
+  .catch((error) => {
+    console.error('Failed to ensure default categories', error);
+  })
+  .finally(() => {
+    app.listen(port, () => {
+      console.log(`Tomato API server listening at http://localhost:${port}`);
+      console.log(`Swagger UI available at http://localhost:${port}/docs`);
+    });
+  });
 
 export default app;

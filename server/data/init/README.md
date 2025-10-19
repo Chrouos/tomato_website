@@ -78,6 +78,22 @@ CREATE TABLE IF NOT EXISTS session_events (
 
 CREATE INDEX IF NOT EXISTS session_events_user_id_idx ON session_events(user_id);
 CREATE INDEX IF NOT EXISTS session_events_session_key_idx ON session_events(session_key);
+
+CREATE TABLE IF NOT EXISTS categories (
+  id TEXT PRIMARY KEY,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  label TEXT NOT NULL,
+  is_default BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS categories_user_id_idx ON categories(user_id);
+
+CREATE TRIGGER set_categories_updated_at
+BEFORE UPDATE ON categories
+FOR EACH ROW
+EXECUTE FUNCTION trigger_set_timestamp();
 ```
 
 資料表關聯說明：
@@ -86,5 +102,10 @@ CREATE INDEX IF NOT EXISTS session_events_session_key_idx ON session_events(sess
 - `email_verification_codes`：儲存 1 小時內有效的 Email 註冊驗證碼，每個 Email 僅保留最新一筆。
 - `sessions`：儲存番茄鐘完成記錄，關聯對應的使用者與分類資訊。
 - `session_events`：紀錄每一次操作（開始、暫停、重置等），可透過 `session_key` 對應同一輪番茄鐘。
+- `categories`：儲存預設與使用者自訂的番茄鐘分類，預設分類 `user_id` 為 `NULL` 並由程式啟動時自動建立。
 
 > 請根據實際需求調整，並確保這些 SQL 檔案保留在本機不要上傳。
+
+```
+docker compose down && docker compose up -d postgres
+```
