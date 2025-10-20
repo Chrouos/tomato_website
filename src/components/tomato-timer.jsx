@@ -1,21 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  Accordion,
-  Badge,
-  Box,
-  Button,
-  ButtonGroup,
-  HStack,
-  Heading,
-  Icon,
-  Input,
-  NumberInput,
-  Stack,
-  Tag,
-  Text,
-  Wrap,
-  WrapItem,
-} from '@chakra-ui/react'
+import { Button, Card, Collapse, Col, Input, InputNumber, Modal, Row, Space, Spin, Tag, Typography } from 'antd'
 import {
   LuCalendar,
   LuClipboardList,
@@ -26,6 +10,7 @@ import {
   LuPlay,
   LuPlus,
   LuRotateCcw,
+  LuX,
 } from 'react-icons/lu'
 import { useAuth } from '../lib/auth-context.jsx'
 import {
@@ -94,6 +79,8 @@ export function TomatoTimer() {
   const [selectedCategoryId, setSelectedCategoryId] = useState(null)
   const [activeCategoryId, setActiveCategoryId] = useState(null)
   const [newCategoryLabel, setNewCategoryLabel] = useState('')
+  const [categoryToDelete, setCategoryToDelete] = useState(null)
+  const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false)
   const [todos, setTodos] = useState([])
   const [newTodoTitle, setNewTodoTitle] = useState('')
   const [newTodoCategoryId, setNewTodoCategoryId] = useState(null)
@@ -601,23 +588,26 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
     [],
   )
 
-  const handleHoursChange = ({ valueAsNumber }) => {
+  const handleHoursChange = (value) => {
     if (isRunning) return
-    const next = Number.isNaN(valueAsNumber) ? 0 : Math.max(valueAsNumber, 0)
-    const capped = Math.min(next, MAX_TOTAL_HOURS)
+    const parsed = Number(value ?? 0)
+    const next = Number.isFinite(parsed) ? parsed : 0
+    const capped = Math.min(Math.max(next, 0), MAX_TOTAL_HOURS)
     applyInputValues(capped, inputMinutes, inputSeconds)
   }
 
-  const handleMinutesChange = ({ valueAsNumber }) => {
+  const handleMinutesChange = (value) => {
     if (isRunning) return
-    const next = Number.isNaN(valueAsNumber) ? 0 : Math.max(valueAsNumber, 0)
-    applyInputValues(inputHours, Math.min(next, ONE_MINUTE - 1), inputSeconds)
+    const parsed = Number(value ?? 0)
+    const next = Number.isFinite(parsed) ? parsed : 0
+    applyInputValues(inputHours, Math.min(Math.max(next, 0), ONE_MINUTE - 1), inputSeconds)
   }
 
-  const handleSecondsChange = ({ valueAsNumber }) => {
+  const handleSecondsChange = (value) => {
     if (isRunning) return
-    const raw = Number.isNaN(valueAsNumber) ? 0 : valueAsNumber
-    const clamped = Math.min(Math.max(raw, 0), ONE_MINUTE - 1)
+    const parsed = Number(value ?? 0)
+    const next = Number.isFinite(parsed) ? parsed : 0
+    const clamped = Math.min(Math.max(next, 0), ONE_MINUTE - 1)
     applyInputValues(inputHours, inputMinutes, clamped)
   }
 
@@ -654,15 +644,13 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
     }
 
     const baseCategoryId = hasStartedBefore
-      ? activeCategoryId ?? selectedCategoryId
-      : selectedCategoryId
-
-    if (!baseCategoryId) {
-      return
-    }
+      ? activeCategoryId ?? selectedCategoryId ?? null
+      : selectedCategoryId ?? null
 
     if (!hasStartedBefore || !activeCategoryId) {
-      setActiveCategoryId(baseCategoryId)
+      if (baseCategoryId) {
+        setActiveCategoryId(baseCategoryId)
+      }
     }
 
     setSessionEnd(new Date(now.getTime() + secondsLeft * 1000))
@@ -790,6 +778,23 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
     } finally {
       setDeletingCategoryId(null)
     }
+  }
+
+  const requestCategoryDeletion = (category) => {
+    setCategoryToDelete(category)
+    setIsDeleteModalVisible(true)
+  }
+
+  const cancelCategoryDeletion = () => {
+    setIsDeleteModalVisible(false)
+    setCategoryToDelete(null)
+  }
+
+  const confirmCategoryDeletion = async () => {
+    if (!categoryToDelete) return
+    await handleRemoveCategory(categoryToDelete.id)
+    setIsDeleteModalVisible(false)
+    setCategoryToDelete(null)
   }
 
   const handleAddDailyTodo = async () => {
@@ -1058,9 +1063,7 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
   ).categoryLabel
   const startButtonLabel = isRunning ? '暫停' : sessionStart ? '繼續' : '開始'
   const isStartDisabled =
-    (!isRunning &&
-      (!selectedCategoryId || secondsLeft <= 0 || isLoadingCategories)) ||
-    false
+    (!isRunning && (secondsLeft <= 0 || isLoadingCategories)) || false
   const pendingDailyTodos = useMemo(
     () => dailyTodos.filter((todo) => todo.completedOn !== todayKey),
     [dailyTodos, todayKey],
@@ -1074,842 +1077,794 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
     .filter((todo) => todo.completed)
     .sort((a, b) => (b.completedAt?.getTime() ?? 0) - (a.completedAt?.getTime() ?? 0))
 
+  const { Title, Text: AntText } = Typography
+  const sessionStatusTagColor =
+    sessionStatusColor === 'green'
+      ? 'green'
+      : sessionStatusColor === 'purple'
+        ? 'purple'
+        : 'default'
+  const iconColorMap = {
+    green: '#52c41a',
+    orange: '#fa8c16',
+    gray: '#8c8c8c',
+    purple: '#722ed1',
+    blue: '#1677ff',
+    pink: '#eb2f96',
+  }
+  const cardMaxHeight = 'calc(100vh - 220px)'
+  const timerCardStyle = {
+    width: '100%',
+    maxWidth: '100%',
+    minWidth: 0,
+    maxHeight: cardMaxHeight,
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+  }
+  const sideCardStyle = {
+    width: '100%',
+    maxWidth: '100%',
+    minWidth: 0,
+    maxHeight: cardMaxHeight,
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+  }
+  const cardBodyStyle = {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 24,
+    minHeight: 0,
+    overflowY: 'auto',
+    height: '100%',
+  }
+  const renderCategorySelection = ({ selectedId, onSelect, emptyText }) => {
+    if (categories.length === 0) {
+      return (
+        <AntText type='secondary' style={{ display: 'block', textAlign: 'center' }}>
+          {emptyText}
+        </AntText>
+      )
+    }
+
+    return (
+      <div style={{ maxHeight: 128, overflowY: 'auto', paddingRight: 4 }}>
+        <Space wrap size={[8, 8]}>
+          {categories.map((category) => (
+            <Tag.CheckableTag
+              key={category.id}
+              checked={category.id === selectedId}
+              onChange={(checked) => {
+                if (checked) {
+                  onSelect(category.id)
+                }
+              }}
+              style={{
+                padding: '4px 12px',
+                borderRadius: 999,
+                border: category.id === selectedId ? '1px solid #1677ff' : '1px solid #d9d9d9',
+                backgroundColor: category.id === selectedId ? '#f0f5ff' : '#fff',
+                lineHeight: '20px',
+              }}
+            >
+              {category.label}
+            </Tag.CheckableTag>
+          ))}
+        </Space>
+      </div>
+    )
+  }
+  const manualTimeSection = (
+    <Space direction='vertical' size={16} style={{ width: '100%' }}>
+      <Space
+        align='center'
+        size={16}
+        style={{ width: '100%', justifyContent: 'center', flexWrap: 'wrap' }}
+      >
+        <Space direction='vertical' size={8} align='center'>
+          <AntText type='secondary' style={{ fontSize: 12 }}>
+            小時
+          </AntText>
+          <InputNumber
+            min={0}
+            max={MAX_TOTAL_HOURS}
+            value={inputHours}
+            disabled={isRunning}
+            onChange={handleHoursChange}
+            onBlur={handleInputsCommit}
+            onPressEnter={handleInputsCommit}
+            style={{ width: 80 }}
+          />
+        </Space>
+        <div style={{ fontSize: 24, fontWeight: 600 }}>:</div>
+        <Space direction='vertical' size={8} align='center'>
+          <AntText type='secondary' style={{ fontSize: 12 }}>
+            分鐘
+          </AntText>
+          <InputNumber
+            min={0}
+            max={59}
+            value={inputMinutes}
+            disabled={isRunning}
+            onChange={handleMinutesChange}
+            onBlur={handleInputsCommit}
+            onPressEnter={handleInputsCommit}
+            style={{ width: 80 }}
+          />
+        </Space>
+        <div style={{ fontSize: 24, fontWeight: 600 }}>:</div>
+        <Space direction='vertical' size={8} align='center'>
+          <AntText type='secondary' style={{ fontSize: 12 }}>
+            秒
+          </AntText>
+          <InputNumber
+            min={0}
+            max={59}
+            value={inputSeconds}
+            disabled={isRunning}
+            onChange={handleSecondsChange}
+            onBlur={handleInputsCommit}
+            onPressEnter={handleInputsCommit}
+            style={{ width: 80 }}
+          />
+        </Space>
+      </Space>
+      <Space align='center' size={12} style={{ justifyContent: 'center', flexWrap: 'wrap' }}>
+        <Button
+          size='small'
+          icon={<LuMinus />}
+          onClick={() => handleAdjust(-1)}
+          disabled={isRunning || secondsLeft < ONE_HOUR}
+        >
+          1 小時
+        </Button>
+        <Button
+          size='small'
+          icon={<LuPlus />}
+          onClick={() => handleAdjust(1)}
+          disabled={isRunning}
+        >
+          1 小時
+        </Button>
+      </Space>
+    </Space>
+  )
+  const manageCategoriesSection = (
+    <Space direction='vertical' size={16} style={{ width: '100%' }}>
+      {isLoadingCategories ? (
+        <div style={{ textAlign: 'center' }}>
+          <Spin size='small' />
+          <AntText type='secondary' style={{ marginLeft: 8 }}>
+            載入分類中...
+          </AntText>
+        </div>
+      ) : categories.length > 0 ? (
+        <div style={{ maxHeight: 128, overflowY: 'auto', paddingRight: 4 }}>
+          <Space wrap size={[8, 8]}>
+            {categories.map((category) => {
+              const isSelected = category.id === selectedCategoryId
+              const canRemove =
+                !isRunning && !category.isDefault && isAuthenticated
+              const isDeleting = deletingCategoryId === category.id
+              return (
+                <Tag
+                  key={category.id}
+                  color={isSelected ? 'cyan' : undefined}
+                  closable={canRemove && !isDeleting}
+                  closeIcon={<LuX size={12} />}
+                  icon={isDeleting ? <Spin size='small' /> : undefined}
+                  onClose={(event) => {
+                    event.preventDefault()
+                    requestCategoryDeletion(category)
+                  }}
+                  style={{
+                    cursor: isRunning ? 'not-allowed' : 'pointer',
+                    opacity: isRunning ? 0.7 : 1,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    paddingRight: 10,
+                    whiteSpace: 'nowrap',
+                  }}
+                  onClick={() => {
+                    if (!isRunning) {
+                      setSelectedCategoryId(category.id)
+                    }
+                  }}
+                >
+                  {category.label}
+                </Tag>
+              )
+            })}
+          </Space>
+        </div>
+      ) : (
+        <AntText type='secondary' style={{ display: 'block', textAlign: 'center' }}>
+          請先新增一個工作類別。
+        </AntText>
+      )}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <Input
+          size='small'
+          placeholder='新增類別'
+          value={newCategoryLabel}
+          disabled={isRunning}
+          onChange={(event) => setNewCategoryLabel(event.target.value)}
+          onPressEnter={(event) => {
+            event.preventDefault()
+            if (!isSavingCategory && !isRunning) {
+              handleAddCategory()
+            }
+          }}
+        />
+        <Button
+          size='small'
+          onClick={handleAddCategory}
+          disabled={
+            isRunning || newCategoryLabel.trim() === '' || isSavingCategory
+          }
+          loading={isSavingCategory}
+        >
+          新增
+        </Button>
+      </div>
+    </Space>
+  )
+  const createDailyTaskSection = (
+    <Space direction='vertical' size={16} style={{ width: '100%' }}>
+      <Input
+        size='small'
+        placeholder='輸入每日任務內容'
+        value={newDailyTodoTitle}
+        onChange={(event) => setNewDailyTodoTitle(event.target.value)}
+        onPressEnter={(event) => {
+          event.preventDefault()
+          handleAddDailyTodo()
+        }}
+      />
+      {renderCategorySelection({
+        selectedId: newDailyTodoCategoryId,
+        onSelect: setNewDailyTodoCategoryId,
+        emptyText: '請先建立工作類別再新增每日任務。',
+      })}
+      <Button
+        size='small'
+        onClick={handleAddDailyTodo}
+        disabled={!newDailyTodoTitle.trim() || !newDailyTodoCategoryId}
+      >
+        建立即日任務
+      </Button>
+    </Space>
+  )
+  const createTodoSection = (
+    <Space direction='vertical' size={16} style={{ width: '100%' }}>
+      <Input
+        size='small'
+        placeholder='輸入待辦事項'
+        value={newTodoTitle}
+        onChange={(event) => setNewTodoTitle(event.target.value)}
+        onPressEnter={(event) => {
+          event.preventDefault()
+          handleAddTodo()
+        }}
+      />
+      {renderCategorySelection({
+        selectedId: newTodoCategoryId,
+        onSelect: setNewTodoCategoryId,
+        emptyText: '請先建立工作類別再新增待辦事項。',
+      })}
+      <Button
+        size='small'
+        onClick={handleAddTodo}
+        disabled={!newTodoTitle.trim() || !newTodoCategoryId}
+      >
+        建立待辦事項
+      </Button>
+    </Space>
+  )
+  const collapseItems = [
+    { key: 'time', label: '手動設定時間', children: manualTimeSection },
+    { key: 'category', label: '管理工作類別', children: manageCategoriesSection },
+    { key: 'daily-create', label: '新增每日任務', children: createDailyTaskSection },
+    { key: 'todo-create', label: '新增待辦事項', children: createTodoSection },
+  ]
+
   return (
-    <Stack
-      direction={{ base: 'column', lg: 'row' }}
-      gap='6'
-      width='full'
-      height='100%'
-      maxH='100%'
-      align='stretch'
-      justify='center'
-      minH='0'
+    <Space
+      direction='vertical'
+      size={24}
+      style={{
+        width: '100%',
+        paddingBottom: 24,
+        paddingRight: 8,
+        height: '100%',
+        minHeight: 0,
+        overflowY: 'auto',
+        boxSizing: 'border-box',
+        overflow: 'hidden'
+      }}
     >
-      <Box
-        borderWidth='1px'
-        borderRadius='xl'
-        padding={{ base: '6', md: '8' }}
-        width='full'
-        background='bg.surface'
-        boxShadow='sm'
-        flex='1'
-        maxH='100%'
-        minH='0'
-        overflowY='auto'
-      
-        order={{ base: 1, lg: 1 }}
-      >
-        <Stack gap='6'>
-          <Stack gap='2' align='center'>
-            <Heading size='lg'>番茄鐘</Heading>
-            <Text color='fg.muted'>保持專注，善用番茄鐘節奏。</Text>
-          </Stack>
+      <Row gutter={[24, 24]}>
+        <Col xs={24} lg={12} xl={8} xxl={8} style={{ minWidth: 0 }}>
+          <Card style={timerCardStyle} bodyStyle={cardBodyStyle}>
+            <Space direction='vertical' size={24} style={{ width: '100%' }}>
+              <Space direction='vertical' size={8} align='center'>
+                <Title level={3} style={{ margin: 0 }}>
+                  番茄鐘
+                </Title>
+              </Space>
 
-          <Stack gap='6' align='center'>
-            <Stack align='center' gap='2'>
-              <Text fontSize='7xl' fontWeight='semibold'>
-                {timeLabel}
-              </Text>
-              <Stack align='center' gap='1'>
-                <Text fontSize='xs' color='fg.muted'>
-                  目前類別
-                </Text>
-                <Badge colorPalette={
-                  activeCategoryId ?? selectedCategoryId ? 'teal' : 'gray'
-                }>
-                  {activeCategoryLabel}
-                </Badge>
-              </Stack>
-            </Stack>
-            <ButtonGroup spacing='3'>
-              <Button
-                onClick={handleToggle}
-                colorScheme={isRunning ? 'orange' : 'green'}
-                minW='32'
-                isDisabled={isStartDisabled}
+              <Space
+                direction='vertical'
+                size={24}
+                align='center'
+                style={{ width: '100%' }}
               >
-                {startButtonLabel}
-              </Button>
-              <Button variant='outline' onClick={handleReset}>
-                重置
-              </Button>
-            </ButtonGroup>
-            <Accordion.Root width='full' maxW='100' collapsible>
-              <Accordion.Item value='time'>
-                <Box borderWidth='1px' borderRadius='lg' overflow='hidden'>
-                  <Accordion.ItemTrigger px='4' py='3'>
-                    <HStack justify='space-between' flex='1'>
-                      <Text fontSize='sm' fontWeight='medium'>
-                        手動設定時間
-                      </Text>
-                      <Accordion.ItemIndicator />
-                    </HStack>
-                  </Accordion.ItemTrigger>
-                  <Accordion.ItemContent px='4' pb='4'>
-                    <Stack gap='4'>
-                      <HStack gap='3' justify='center'>
-                        <Stack align='center' gap='1'>
-                          <Text fontSize='xs' color='fg.muted'>
-                            小時
-                          </Text>
-                          <NumberInput.Root
-                            width='28'
-                            value={String(inputHours)}
-                            onValueChange={handleHoursChange}
-                            min={0}
-                            max={MAX_TOTAL_HOURS}
-                            keepWithinRange={false}
-                            clampValueOnBlur={false}
-                            disabled={isRunning}
-                          >
-                            <NumberInput.Control />
-                            <NumberInput.Input
-                              textAlign='center'
-                              onBlur={handleInputsCommit}
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter') {
-                                  event.preventDefault()
-                                  event.currentTarget.blur()
-                                }
-                              }}
-                              inputMode='numeric'
-                              pattern='[0-9]*'
-                            />
-                          </NumberInput.Root>
-                        </Stack>
-                        <Text fontSize='lg' fontWeight='medium' color='fg.muted'>
-                          :
-                        </Text>
-                        <Stack align='center' gap='1'>
-                          <Text fontSize='xs' color='fg.muted'>
-                            分鐘
-                          </Text>
-                          <NumberInput.Root
-                            width='28'
-                            value={String(inputMinutes)}
-                            onValueChange={handleMinutesChange}
-                            min={0}
-                            max={59}
-                            keepWithinRange={false}
-                            clampValueOnBlur={false}
-                            disabled={isRunning}
-                          >
-                            <NumberInput.Control />
-                            <NumberInput.Input
-                              textAlign='center'
-                              onBlur={handleInputsCommit}
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter') {
-                                  event.preventDefault()
-                                  event.currentTarget.blur()
-                                }
-                              }}
-                              inputMode='numeric'
-                              pattern='[0-9]*'
-                            />
-                          </NumberInput.Root>
-                        </Stack>
-                        <Text fontSize='lg' fontWeight='medium' color='fg.muted'>
-                          :
-                        </Text>
-                        <Stack align='center' gap='1'>
-                          <Text fontSize='xs' color='fg.muted'>
-                            秒
-                          </Text>
-                          <NumberInput.Root
-                            width='28'
-                            value={String(inputSeconds)}
-                            onValueChange={handleSecondsChange}
-                            min={0}
-                            max={59}
-                            keepWithinRange
-                            clampValueOnBlur={false}
-                            disabled={isRunning}
-                          >
-                            <NumberInput.Control />
-                            <NumberInput.Input
-                              textAlign='center'
-                              onBlur={handleInputsCommit}
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter') {
-                                  event.preventDefault()
-                                  event.currentTarget.blur()
-                                }
-                              }}
-                              inputMode='numeric'
-                              pattern='[0-9]*'
-                            />
-                          </NumberInput.Root>
-                        </Stack>
-                      </HStack>
-                      <HStack gap='2' justify='center'>
-                        <Button
-                          leftIcon={<LuMinus />}
-                          onClick={() => handleAdjust(-1)}
-                          isDisabled={isRunning || secondsLeft < ONE_HOUR}
-                          variant='outline'
-                          size='sm'
-                          _disabled={{
-                            opacity: 1,
-                            bg: 'gray.200',
-                            color: 'fg.muted',
-                            borderColor: 'gray.300',
-                          }}
-                        >
-                          -1 小時
-                        </Button>
-                        <Button
-                          rightIcon={<LuPlus />}
-                          onClick={() => handleAdjust(1)}
-                          variant='outline'
-                          size='sm'
-                          isDisabled={isRunning}
-                          _disabled={{
-                            opacity: 1,
-                            bg: 'gray.200',
-                            color: 'fg.muted',
-                            borderColor: 'gray.300',
-                          }}
-                        >
-                          +1 小時
-                        </Button>
-                      </HStack>
-                    </Stack>
-                  </Accordion.ItemContent>
-                </Box>
-              </Accordion.Item>
-              <Accordion.Item value='category'>
-                <Box borderWidth='1px' borderRadius='lg' overflow='hidden'>
-                  <Accordion.ItemTrigger px='4' py='3'>
-                    <HStack justify='space-between' flex='1'>
-                      <Text fontSize='sm' fontWeight='medium'>
-                        管理工作類別
-                      </Text>
-                      <Accordion.ItemIndicator />
-                    </HStack>
-                  </Accordion.ItemTrigger>
-                  <Accordion.ItemContent px='4' pb='4'>
-                    <Stack gap='3'>
-                      {isLoadingCategories ? (
-                        <Text fontSize='sm' color='fg.muted' textAlign='center'>
-                          載入分類中...
-                        </Text>
-                      ) : categories.length > 0 ? (
-                        <Box maxHeight='32' overflowY='auto' pr='1'>
-                          <Wrap justify='center' spacing='2'>
-                            {categories.map((category) => (
-                              <WrapItem key={category.id}>
-                                <Tag.Root
-                                  variant={
-                                    category.id === selectedCategoryId
-                                      ? 'solid'
-                                      : 'subtle'
-                                  }
-                                  colorPalette='teal'
-                                  cursor={isRunning ? 'not-allowed' : 'pointer'}
-                                  opacity={isRunning ? 0.7 : 1}
-                                  onClick={() => {
-                                    if (!isRunning) {
-                                      setSelectedCategoryId(category.id)
-                                    }
-                                  }}
-                                >
-                                  <Tag.Label>{category.label}</Tag.Label>
-                                  <Tag.EndElement>
-                                    <Tag.CloseTrigger
-                                      disabled={
-                                        isRunning ||
-                                        category.isDefault ||
-                                        deletingCategoryId === category.id ||
-                                        !isAuthenticated
-                                      }
-                                      onClick={async (event) => {
-                                        event.stopPropagation()
-                                        await handleRemoveCategory(category.id)
-                                      }}
-                                    />
-                                  </Tag.EndElement>
-                                </Tag.Root>
-                              </WrapItem>
-                            ))}
-                          </Wrap>
-                        </Box>
-                      ) : (
-                        <Text fontSize='sm' color='fg.muted' textAlign='center'>
-                          請先新增一個工作類別。
-                        </Text>
-                      )}
-                      <HStack>
-                        <Input
-                          size='sm'
-                          placeholder='新增類別'
-                          value={newCategoryLabel}
-                          onChange={(event) => setNewCategoryLabel(event.target.value)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                              event.preventDefault()
-                              if (!isSavingCategory) {
-                                handleAddCategory()
-                              }
-                            }
-                          }}
-                          isDisabled={isRunning}
-                        />
-                        <Button
-                          size='sm'
-                          variant='outline'
-                          onClick={handleAddCategory}
-                          isDisabled={
-                            isRunning ||
-                            newCategoryLabel.trim() === '' ||
-                            isSavingCategory
-                          }
-                          isLoading={isSavingCategory}
-                        >
-                          新增
-                        </Button>
-                      </HStack>
-                    </Stack>
-                  </Accordion.ItemContent>
-                </Box>
-              </Accordion.Item>
-              <Accordion.Item value='daily-create'>
-                <Box borderWidth='1px' borderRadius='lg' overflow='hidden'>
-                  <Accordion.ItemTrigger px='4' py='3'>
-                    <HStack justify='space-between' flex='1'>
-                      <Text fontSize='sm' fontWeight='medium'>
-                        新增每日任務
-                      </Text>
-                      <Accordion.ItemIndicator />
-                    </HStack>
-                  </Accordion.ItemTrigger>
-                  <Accordion.ItemContent px='4' pb='4'>
-                    <Stack gap='3'>
-                      <Input
-                        size='sm'
-                        placeholder='輸入每日任務內容'
-                        value={newDailyTodoTitle}
-                        onChange={(event) => setNewDailyTodoTitle(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') {
-                            event.preventDefault()
-                            handleAddDailyTodo()
-                          }
-                        }}
-                      />
-                      {categories.length > 0 ? (
-                        <Box maxHeight='32' overflowY='auto' pr='1'>
-                          <Wrap justify='center' spacing='2'>
-                            {categories.map((category) => (
-                              <WrapItem key={category.id}>
-                                <Tag.Root
-                                  variant={
-                                    category.id === newDailyTodoCategoryId ? 'solid' : 'subtle'
-                                  }
-                                  colorPalette='pink'
-                                  cursor='pointer'
-                                  onClick={() => setNewDailyTodoCategoryId(category.id)}
-                                >
-                                  <Tag.Label>{category.label}</Tag.Label>
-                                </Tag.Root>
-                              </WrapItem>
-                            ))}
-                          </Wrap>
-                        </Box>
-                      ) : (
-                        <Text fontSize='sm' color='fg.muted' textAlign='center'>
-                          請先建立工作類別再新增每日任務。
-                        </Text>
-                      )}
-                      <Button
-                        size='sm'
-                        variant='outline'
-                        onClick={handleAddDailyTodo}
-                        isDisabled={!newDailyTodoTitle.trim() || !newDailyTodoCategoryId}
-                      >
-                        建立即日任務
-                      </Button>
-                    </Stack>
-                  </Accordion.ItemContent>
-                </Box>
-              </Accordion.Item>
-              <Accordion.Item value='todo-create'>
-                <Box borderWidth='1px' borderRadius='lg' overflow='hidden'>
-                  <Accordion.ItemTrigger px='4' py='3'>
-                    <HStack justify='space-between' flex='1'>
-                      <Text fontSize='sm' fontWeight='medium'>
-                        新增待辦事項
-                      </Text>
-                      <Accordion.ItemIndicator />
-                    </HStack>
-                  </Accordion.ItemTrigger>
-                  <Accordion.ItemContent px='4' pb='4'>
-                    <Stack gap='3'>
-                      <Input
-                        size='sm'
-                        placeholder='輸入待辦事項'
-                        value={newTodoTitle}
-                        onChange={(event) => setNewTodoTitle(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') {
-                            event.preventDefault()
-                            handleAddTodo()
-                          }
-                        }}
-                      />
-                      {categories.length > 0 ? (
-                        <Box maxHeight='32' overflowY='auto' pr='1'>
-                          <Wrap justify='center' spacing='2'>
-                            {categories.map((category) => (
-                              <WrapItem key={category.id}>
-                                <Tag.Root
-                                  variant={category.id === newTodoCategoryId ? 'solid' : 'subtle'}
-                                  colorPalette='purple'
-                                  cursor='pointer'
-                                  onClick={() => setNewTodoCategoryId(category.id)}
-                                >
-                                  <Tag.Label>{category.label}</Tag.Label>
-                                </Tag.Root>
-                              </WrapItem>
-                            ))}
-                          </Wrap>
-                        </Box>
-                      ) : (
-                        <Text fontSize='sm' color='fg.muted' textAlign='center'>
-                          請先建立工作類別再新增待辦事項。
-                        </Text>
-                      )}
-                      <Button
-                        size='sm'
-                        variant='outline'
-                        onClick={handleAddTodo}
-                        isDisabled={!newTodoTitle.trim() || !newTodoCategoryId}
-                      >
-                        建立待辦事項
-                      </Button>
-                    </Stack>
-                  </Accordion.ItemContent>
-                </Box>
-              </Accordion.Item>
-            </Accordion.Root>
-          </Stack>
+                <div style={{ fontSize: '4rem', fontWeight: 600 }}>{timeLabel}</div>
+                <Space direction='vertical' size={4} align='center'>
+                  <AntText type='secondary' style={{ fontSize: 12 }}>
+                    目前類別
+                  </AntText>
+                  <Tag color={activeCategoryId ?? selectedCategoryId ? 'processing' : undefined}>
+                    {activeCategoryLabel}
+                  </Tag>
+                </Space>
+              </Space>
 
-          <Text fontSize='sm' color='fg.muted' textAlign='center'>
-            小技巧：一次專注 25 分鐘，接著短暫休息 5 分鐘。
-          </Text>
-        </Stack>
-      </Box>
+              <Space size={12} wrap style={{ justifyContent: 'center' }}>
+                <Button
+                  type='primary'
+                  size='large'
+                  icon={isRunning ? <LuPause /> : <LuPlay />}
+                  onClick={handleToggle}
+                  disabled={isStartDisabled}
+                  style={{ minWidth: 128 }}
+                >
+                  {startButtonLabel}
+                </Button>
+                <Button size='large' icon={<LuRotateCcw />} onClick={handleReset}>
+                  重置
+                </Button>
+              </Space>
 
-      <Box
-        borderWidth='1px'
-        borderRadius='xl'
-        padding={{ base: '6', md: '8' }}
-        width='full'
-        maxW={{ base: 'full', lg: 'sm' }}
-        background='bg.subtle'
-        boxShadow='sm'
-        flex={{ base: 'none', lg: '1' }}
-        maxH='100%'
-        minH='0'
-        overflowY='auto'
-        order={{ base: 2, lg: 2 }}
+              <Collapse items={collapseItems} bordered={false} />
+
+              <AntText type='secondary' style={{ textAlign: 'center' }}>
+                小技巧：一次專注 25 分鐘，接著短暫休息 5 分鐘。
+              </AntText>
+            </Space>
+          </Card>
+        </Col>
+
+        <Col xs={24} lg={12} xl={8} xxl={8} style={{ minWidth: 0 }}>
+          <Card style={sideCardStyle} bodyStyle={cardBodyStyle}>
+            <Space direction='vertical' size={24} style={{ width: '100%' }}>
+              <Space direction='vertical' size={12} align='center'>
+                <Title level={4} style={{ margin: 0 }}>
+                  番茄時間軸
+                </Title>
+                <Tag color={sessionStatusTagColor}>{sessionStatus}</Tag>
+              </Space>
+
+              <Space direction='vertical' size={16}>
+                <Space align='center' size={12}>
+                  <LuCalendar size={24} color={iconColorMap.gray} />
+                  <Space direction='vertical' size={0}>
+                    <AntText type='secondary' style={{ fontSize: 12 }}>
+                      日期
+                    </AntText>
+                    <AntText strong>
+                      {sessionStart
+                        ? new Intl.DateTimeFormat('zh-TW', {
+                            month: '2-digit',
+                            day: '2-digit',
+                          }).format(sessionStart)
+                        : new Intl.DateTimeFormat('zh-TW', {
+                            month: '2-digit',
+                            day: '2-digit',
+                          }).format(new Date())}
+                    </AntText>
+                  </Space>
+                </Space>
+                <Space align='center' size={12}>
+                  <LuClock size={24} color={iconColorMap.gray} />
+                  <Space direction='vertical' size={0}>
+                    <AntText type='secondary' style={{ fontSize: 12 }}>
+                      番茄鐘時段
+                    </AntText>
+                    <AntText strong>
+                      {sessionStartLabel} → {sessionEndLabel}
+                    </AntText>
+                  </Space>
+                </Space>
+                <Space align='center' size={12}>
+                  <LuClipboardList size={24} color={iconColorMap.gray} />
+                  <Space direction='vertical' size={0}>
+                    <AntText type='secondary' style={{ fontSize: 12 }}>
+                      工作類別
+                    </AntText>
+                    <AntText strong>{activeCategoryLabel}</AntText>
+                  </Space>
+                </Space>
+              </Space>
+
+              <Space direction='vertical' size={12} style={{ width: '100%' }}>
+                <Title level={5} style={{ margin: 0 }}>
+                  操作紀錄
+                </Title>
+                <div style={{ maxHeight: 280, overflowY: 'auto', paddingRight: 8 }}>
+                  {eventLog.length === 0 ? (
+                    <AntText type='secondary'>目前尚未有番茄鐘操作。</AntText>
+                  ) : (
+                    eventLog.map((event) => {
+                      const descriptors = {
+                        start: { label: '開始', icon: LuPlay, color: 'green' },
+                        resume: { label: '繼續', icon: LuPlay, color: 'green' },
+                        pause: { label: '暫停', icon: LuPause, color: 'orange' },
+                        reset: { label: '重置', icon: LuRotateCcw, color: 'gray' },
+                        complete: {
+                          label: '結束',
+                          icon: LuCheck,
+                          color: 'purple',
+                        },
+                        'todo-add': {
+                          label: '新增待辦',
+                          icon: LuClipboardList,
+                          color: 'blue',
+                        },
+                        'todo-complete': {
+                          label: '完成待辦',
+                          icon: LuCheck,
+                          color: 'purple',
+                        },
+                        'todo-reopen': {
+                          label: '還原待辦',
+                          icon: LuRotateCcw,
+                          color: 'gray',
+                        },
+                        'daily-todo-add': {
+                          label: '新增每日任務',
+                          icon: LuClipboardList,
+                          color: 'pink',
+                        },
+                        'daily-todo-complete': {
+                          label: '完成每日任務',
+                          icon: LuCheck,
+                          color: 'pink',
+                        },
+                        'daily-todo-reset': {
+                          label: '重置每日任務',
+                          icon: LuRotateCcw,
+                          color: 'pink',
+                        },
+                      }
+                      const meta =
+                        descriptors[event.type] ?? {
+                          label: '未知事件',
+                          icon: LuClock,
+                          color: 'gray',
+                        }
+
+                      let detail = null
+                      if (event.type === 'start') {
+                        if (typeof event.remainingSeconds === 'number') {
+                          detail = `倒數 ${formatTime(event.remainingSeconds)}`
+                        }
+                      } else if (event.type === 'resume' || event.type === 'pause') {
+                        if (typeof event.remainingSeconds === 'number') {
+                          detail = `剩餘 ${formatTime(event.remainingSeconds)}`
+                        }
+                      } else if (event.type === 'reset') {
+                        if (typeof event.totalSeconds === 'number') {
+                          detail = `重設為 ${formatTime(event.totalSeconds)}`
+                        }
+                      } else if (event.type === 'complete') {
+                        detail = '番茄鐘完成'
+                      } else if (event.type === 'todo-add') {
+                        detail = `新增 ${event.todoTitle}`
+                      } else if (event.type === 'todo-complete') {
+                        detail = `完成 ${event.todoTitle}`
+                      } else if (event.type === 'todo-reopen') {
+                        detail = `重新開啟 ${event.todoTitle}`
+                      } else if (event.type === 'daily-todo-add') {
+                        detail = `新增每日任務 ${event.todoTitle}`
+                      } else if (event.type === 'daily-todo-complete') {
+                        detail = `完成今日每日任務 ${event.todoTitle}`
+                      } else if (event.type === 'daily-todo-reset') {
+                        detail = `重新開始每日任務 ${event.todoTitle}`
+                      }
+
+                      const IconComponent = meta.icon
+
+                      return (
+                        <div
+                          key={event.id}
+                          style={{ display: 'flex', gap: 12, marginBottom: 12 }}
+                        >
+                          <div style={{ marginTop: 4 }}>
+                            <IconComponent
+                              size={20}
+                              color={iconColorMap[meta.color] ?? iconColorMap.gray}
+                            />
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'baseline',
+                                gap: 8,
+                              }}
+                            >
+                              <AntText strong>{meta.label}</AntText>
+                              <AntText type='secondary' style={{ fontSize: 12 }}>
+                                {formatTimeOfDay(event.timestamp)}
+                              </AntText>
+                            </div>
+                            {detail && (
+                              <AntText type='secondary' style={{ fontSize: 12, display: 'block' }}>
+                                {detail}
+                              </AntText>
+                            )}
+                            {event.categoryLabel && (
+                              <AntText type='secondary' style={{ fontSize: 12, display: 'block' }}>
+                                類別：{event.categoryLabel}
+                              </AntText>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+              </Space>
+            </Space>
+          </Card>
+        </Col>
+
+        <Col xs={24} lg={24} xl={8} xxl={8} style={{ minWidth: 0 }}>
+          <Card style={sideCardStyle} bodyStyle={cardBodyStyle}>
+            <Space direction='vertical' size={24} style={{ width: '100%' }}>
+              <Space direction='vertical' size={8} align='center'>
+                <Title level={4} style={{ margin: 0 }}>
+                  每日任務與待辦執行
+                </Title>
+                <AntText type='secondary'>
+                  在這裡勾選完成或重置每日任務與待辦事項。
+                </AntText>
+              </Space>
+
+              <Space direction='vertical' size={20}>
+                <Space direction='vertical' size={12}>
+                  <Title level={5} style={{ margin: 0 }}>
+                    今日每日任務
+                  </Title>
+                  <AntText type='secondary' style={{ fontSize: 12 }}>
+                    待完成
+                  </AntText>
+                  {isLoadingDailyTasks ? (
+                    <AntText type='secondary' style={{ textAlign: 'center' }}>
+                      每日任務載入中…
+                    </AntText>
+                  ) : pendingDailyTodos.length === 0 ? (
+                    <AntText type='secondary' style={{ textAlign: 'center' }}>
+                      今日任務都完成了，太棒了！
+                    </AntText>
+                  ) : (
+                    <div style={{ maxHeight: 160, overflowY: 'auto', paddingRight: 8 }}>
+                      <Space direction='vertical' size={8} style={{ width: '100%' }}>
+                        {pendingDailyTodos.map((todo) => {
+                          const category = getCategorySnapshot(todo.categoryId)
+                          return (
+                            <div
+                              key={todo.id}
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                border: '1px solid #f0f0f0',
+                                borderRadius: 8,
+                                padding: '8px 12px',
+                              }}
+                            >
+                              <Space direction='vertical' size={0}>
+                                <AntText strong>{todo.title}</AntText>
+                                <AntText type='secondary' style={{ fontSize: 12 }}>
+                                  類別：{category.categoryLabel}
+                                </AntText>
+                              </Space>
+                              <Button
+                                size='small'
+                                type='primary'
+                                onClick={() => handleToggleDailyTodo(todo.id)}
+                              >
+                                完成
+                              </Button>
+                            </div>
+                          )
+                        })}
+                      </Space>
+                    </div>
+                  )}
+                  <AntText type='secondary' style={{ fontSize: 12 }}>
+                    已完成
+                  </AntText>
+                  {isLoadingDailyTasks ? (
+                    <AntText type='secondary' style={{ textAlign: 'center' }}>
+                      每日任務載入中…
+                    </AntText>
+                  ) : completedDailyTodos.length === 0 ? (
+                    <AntText type='secondary' style={{ textAlign: 'center' }}>
+                      尚未有完成的每日任務。
+                    </AntText>
+                  ) : (
+                    <div style={{ maxHeight: 160, overflowY: 'auto', paddingRight: 8 }}>
+                      <Space direction='vertical' size={8} style={{ width: '100%' }}>
+                        {completedDailyTodos.map((todo) => {
+                          const category = getCategorySnapshot(todo.categoryId)
+                          const completedAtLabel = todo.completedAt
+                            ? formatTimeOfDay(todo.completedAt)
+                            : '—'
+                          return (
+                            <Space
+                              key={todo.id}
+                              direction='vertical'
+                              size={6}
+                              style={{
+                                border: '1px solid #e6f4ff',
+                                borderRadius: 8,
+                                padding: '10px 12px',
+                                background: '#f0f5ff',
+                              }}
+                            >
+                              <Space
+                                align='center'
+                                size={8}
+                                style={{ width: '100%', justifyContent: 'space-between' }}
+                              >
+                                <AntText strong>{todo.title}</AntText>
+                                <Button
+                                  size='small'
+                                  onClick={() => handleToggleDailyTodo(todo.id)}
+                                >
+                                  重新開始
+                                </Button>
+                              </Space>
+                              <AntText type='secondary' style={{ fontSize: 12 }}>
+                                類別：{category.categoryLabel}
+                              </AntText>
+                              <AntText type='secondary' style={{ fontSize: 12 }}>
+                                完成於：{completedAtLabel}
+                              </AntText>
+                            </Space>
+                          )
+                        })}
+                      </Space>
+                    </div>
+                  )}
+                </Space>
+
+                <Space direction='vertical' size={12}>
+                  <Title level={5} style={{ margin: 0 }}>
+                    待辦事項
+                  </Title>
+                  <AntText type='secondary' style={{ fontSize: 12 }}>
+                    待完成
+                  </AntText>
+                  {isLoadingTodosRemote ? (
+                    <AntText type='secondary' style={{ textAlign: 'center' }}>
+                      待辦事項載入中…
+                    </AntText>
+                  ) : pendingTodos.length === 0 ? (
+                    <AntText type='secondary' style={{ textAlign: 'center' }}>
+                      尚未新增待辦事項。
+                    </AntText>
+                  ) : (
+                    <div style={{ maxHeight: 160, overflowY: 'auto', paddingRight: 8 }}>
+                      <Space direction='vertical' size={8} style={{ width: '100%' }}>
+                        {pendingTodos.map((todo) => {
+                          const category = getCategorySnapshot(todo.categoryId)
+                          return (
+                            <div
+                              key={todo.id}
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                border: '1px solid #f0f0f0',
+                                borderRadius: 8,
+                                padding: '8px 12px',
+                              }}
+                            >
+                              <Space direction='vertical' size={0}>
+                                <AntText strong>{todo.title}</AntText>
+                                <AntText type='secondary' style={{ fontSize: 12 }}>
+                                  類別：{category.categoryLabel}
+                                </AntText>
+                              </Space>
+                              <Button
+                                size='small'
+                                type='primary'
+                                onClick={() => handleToggleTodo(todo.id)}
+                              >
+                                完成
+                              </Button>
+                            </div>
+                          )
+                        })}
+                      </Space>
+                    </div>
+                  )}
+                  <AntText type='secondary' style={{ fontSize: 12 }}>
+                    已完成
+                  </AntText>
+                  {isLoadingTodosRemote ? (
+                    <AntText type='secondary' style={{ textAlign: 'center' }}>
+                      待辦事項載入中…
+                    </AntText>
+                  ) : completedTodos.length === 0 ? (
+                    <AntText type='secondary' style={{ textAlign: 'center' }}>
+                      還沒有完成的待辦。
+                    </AntText>
+                  ) : (
+                    <div style={{ maxHeight: 160, overflowY: 'auto', paddingRight: 8 }}>
+                      <Space direction='vertical' size={8} style={{ width: '100%' }}>
+                        {completedTodos.map((todo) => {
+                          const category = getCategorySnapshot(todo.categoryId)
+                          return (
+                            <div
+                              key={todo.id}
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                border: '1px solid #f0f0f0',
+                                borderRadius: 8,
+                                padding: '8px 12px',
+                                background: '#fafafa',
+                              }}
+                            >
+                              <Space direction='vertical' size={0}>
+                                <AntText>{todo.title}</AntText>
+                                <AntText type='secondary' style={{ fontSize: 12 }}>
+                                  類別：{category.categoryLabel}
+                                </AntText>
+                                <AntText type='secondary' style={{ fontSize: 12 }}>
+                                  完成於：{todo.completedAt ? formatTimeOfDay(todo.completedAt) : '—'}
+                                </AntText>
+                              </Space>
+                              <Button size='small' onClick={() => handleToggleTodo(todo.id)}>
+                                還原
+                              </Button>
+                            </div>
+                          )
+                        })}
+                      </Space>
+                    </div>
+                  )}
+                </Space>
+              </Space>
+            </Space>
+          </Card>
+        </Col>
+      </Row>
+      <Modal
+        title='刪除分類'
+        open={isDeleteModalVisible}
+        onOk={confirmCategoryDeletion}
+        onCancel={cancelCategoryDeletion}
+        okText='刪除'
+        okButtonProps={{ danger: true }}
+        cancelText='取消'
+        confirmLoading={
+          categoryToDelete ? deletingCategoryId === categoryToDelete.id : false
+        }
       >
-        <Stack gap='6'>
-          <Stack align='center' gap='3'>
-            <Heading size='md'>番茄時間軸</Heading>
-            <Badge colorPalette={sessionStatusColor}>{sessionStatus}</Badge>
-          </Stack>
-          <Stack gap='4'>
-            <HStack gap='3' align='center'>
-              <Icon as={LuCalendar} boxSize='6' color='fg.muted' />
-              <Stack gap='0'>
-                <Text fontSize='sm' color='fg.muted'>
-                  日期
-                </Text>
-                <Text fontWeight='medium'>
-                  {sessionStart
-                    ? new Intl.DateTimeFormat('zh-TW', {
-                        month: '2-digit',
-                        day: '2-digit',
-                      }).format(sessionStart)
-                    : new Intl.DateTimeFormat('zh-TW', {
-                        month: '2-digit',
-                        day: '2-digit',
-                      }).format(new Date())}
-                </Text>
-              </Stack>
-            </HStack>
-            <HStack gap='3' align='center'>
-              <Icon as={LuClock} boxSize='6' color='fg.muted' />
-              <Stack gap='0'>
-                <Text fontSize='sm' color='fg.muted'>
-                  番茄鐘時段
-                </Text>
-                <Text fontWeight='medium'>
-                  {sessionStartLabel} → {sessionEndLabel}
-                </Text>
-              </Stack>
-            </HStack>
-            <HStack gap='3' align='center'>
-              <Icon as={LuClipboardList} boxSize='6' color='fg.muted' />
-              <Stack gap='0'>
-                <Text fontSize='sm' color='fg.muted'>
-                  工作類別
-                </Text>
-                <Text fontWeight='medium'>{activeCategoryLabel}</Text>
-              </Stack>
-            </HStack>
-          </Stack>
-          <Stack gap='3'>
-            <Heading size='sm'>操作紀錄</Heading>
-            <Stack gap='3' maxHeight='70' overflowY='auto' paddingEnd='1'>
-              {eventLog.length === 0 ? (
-                <Text fontSize='sm' color='fg.muted'>
-                  目前尚未有番茄鐘操作。
-                </Text>
-              ) : (
-                eventLog.map((event) => {
-                  const descriptors = {
-                    start: { label: '開始', icon: LuPlay, color: 'green' },
-                    resume: { label: '繼續', icon: LuPlay, color: 'green' },
-                    pause: { label: '暫停', icon: LuPause, color: 'orange' },
-                    reset: { label: '重置', icon: LuRotateCcw, color: 'gray' },
-                    complete: {
-                      label: '結束',
-                      icon: LuCheck,
-                      color: 'purple',
-                    },
-                    'todo-add': {
-                      label: '新增待辦',
-                      icon: LuClipboardList,
-                      color: 'blue',
-                    },
-                    'todo-complete': {
-                      label: '完成待辦',
-                      icon: LuCheck,
-                      color: 'purple',
-                    },
-                    'todo-reopen': {
-                      label: '還原待辦',
-                      icon: LuRotateCcw,
-                      color: 'gray',
-                    },
-                    'daily-todo-add': {
-                      label: '新增每日任務',
-                      icon: LuClipboardList,
-                      color: 'pink',
-                    },
-                    'daily-todo-complete': {
-                      label: '完成每日任務',
-                      icon: LuCheck,
-                      color: 'pink',
-                    },
-                    'daily-todo-reset': {
-                      label: '重置每日任務',
-                      icon: LuRotateCcw,
-                      color: 'pink',
-                    },
-                  }
-                  const meta =
-                    descriptors[event.type] ?? {
-                      label: '未知事件',
-                      icon: LuClock,
-                      color: 'gray',
-                    }
-
-                  let detail = null
-                  if (event.type === 'start') {
-                    if (typeof event.remainingSeconds === 'number') {
-                      detail = `倒數 ${formatTime(event.remainingSeconds)}`
-                    }
-                  } else if (
-                    event.type === 'resume' ||
-                    event.type === 'pause'
-                  ) {
-                    if (typeof event.remainingSeconds === 'number') {
-                      detail = `剩餘 ${formatTime(event.remainingSeconds)}`
-                    }
-                  } else if (event.type === 'reset') {
-                    if (typeof event.totalSeconds === 'number') {
-                      detail = `重設為 ${formatTime(event.totalSeconds)}`
-                    }
-                  } else if (event.type === 'complete') {
-                    detail = '番茄鐘完成'
-                  } else if (event.type === 'todo-add') {
-                    detail = `新增 ${event.todoTitle}`
-                  } else if (event.type === 'todo-complete') {
-                    detail = `完成 ${event.todoTitle}`
-                  } else if (event.type === 'todo-reopen') {
-                    detail = `重新開啟 ${event.todoTitle}`
-                  } else if (event.type === 'daily-todo-add') {
-                    detail = `新增每日任務 ${event.todoTitle}`
-                  } else if (event.type === 'daily-todo-complete') {
-                    detail = `完成今日每日任務 ${event.todoTitle}`
-                  } else if (event.type === 'daily-todo-reset') {
-                    detail = `重新開始每日任務 ${event.todoTitle}`
-                  }
-
-                  return (
-                    <HStack key={event.id} align='flex-start' gap='3'>
-                      <Icon
-                        as={meta.icon}
-                        boxSize='5'
-                        color={`${meta.color}.500`}
-                        marginTop='1'
-                      />
-                      <Stack gap='0' flex='1'>
-                        <HStack justify='space-between'>
-                          <Text fontWeight='medium'>{meta.label}</Text>
-                          <Text fontSize='xs' color='fg.muted'>
-                            {formatTimeOfDay(event.timestamp)}
-                          </Text>
-                        </HStack>
-                        {detail && (
-                          <Text fontSize='xs' color='fg.muted'>
-                            {detail}
-                          </Text>
-                        )}
-                        {event.categoryLabel && (
-                          <Text fontSize='xs' color='fg.muted'>
-                            類別：{event.categoryLabel}
-                          </Text>
-                        )}
-                      </Stack>
-                    </HStack>
-                  )
-                })
-              )}
-            </Stack>
-          </Stack>
-        </Stack>
-      </Box>
-
-      <Box
-        borderWidth='1px'
-        borderRadius='xl'
-        padding={{ base: '6', md: '8' }}
-        width='full'
-        maxW={{ base: 'full', lg: 'sm' }}
-        background='bg.surface'
-        boxShadow='sm'
-        flex={{ base: 'none', lg: '1' }}
-        maxH='100%'
-        minH='0'
-        overflowY='auto'
-        order={{ base: 3, lg: 3 }}
-      >
-        <Stack gap='6'>
-          <Stack align='center' gap='2' >
-            <Heading size='md'>每日任務與待辦執行</Heading>
-            <Text fontSize='sm' color='fg.muted'>
-              在這裡勾選完成或重置每日任務與待辦事項。
-            </Text>
-          </Stack>
-
-          
-
-          <Stack gap='5'>
-            <Stack gap='3'>
-              <Heading size='sm'>今日每日任務</Heading>
-              <Stack gap='2'>
-                <Text fontSize='xs' color='fg.muted'>
-                  待完成
-                </Text>
-                {isLoadingDailyTasks ? (
-                  <Text fontSize='sm' color='fg.muted' textAlign='center'>
-                    每日任務載入中…
-                  </Text>
-                ) : pendingDailyTodos.length === 0 ? (
-                  <Text fontSize='sm' color='fg.muted' textAlign='center'>
-                    今日任務都完成了，太棒了！
-                  </Text>
-                ) : (
-                  pendingDailyTodos.map((todo) => {
-                    const category = getCategorySnapshot(todo.categoryId)
-                    return (
-                      <HStack
-                        key={todo.id}
-                        justify='space-between'
-                        borderWidth='1px'
-                        borderRadius='md'
-                        px='3'
-                        py='2'
-                      >
-                        <Stack gap='0'>
-                          <Text fontSize='sm'>{todo.title}</Text>
-                          <Text fontSize='xs' color='fg.muted'>
-                            類別：{category.categoryLabel}
-                          </Text>
-                        </Stack>
-                        <Button
-                          size='xs'
-                          variant='solid'
-                          colorScheme='teal'
-                          onClick={() => handleToggleDailyTodo(todo.id)}
-                        >
-                          完成今日
-                        </Button>
-                      </HStack>
-                    )
-                  })
-                )}
-              </Stack>
-              <Stack gap='2'>
-                <Text fontSize='xs' color='fg.muted'>
-                  今日已完成
-                </Text>
-                {isLoadingDailyTasks ? (
-                  <Text fontSize='sm' color='fg.muted' textAlign='center'>
-                    每日任務載入中…
-                  </Text>
-                ) : completedDailyTodos.length === 0 ? (
-                  <Text fontSize='sm' color='fg.muted' textAlign='center'>
-                    還沒有完成的每日任務。
-                  </Text>
-                ) : (
-                  <Stack gap='2' maxHeight='32' overflowY='auto' pr='1'>
-                    {completedDailyTodos.map((todo) => {
-                      const category = getCategorySnapshot(todo.categoryId)
-                      const completedAtLabel = todo.updatedAt
-                        ? formatTimeOfDay(new Date(todo.updatedAt))
-                        : '--:--:--'
-                      return (
-                        <HStack
-                          key={todo.id}
-                          justify='space-between'
-                          borderWidth='1px'
-                          borderRadius='md'
-                          px='3'
-                          py='2'
-                          bg='teal.50'
-                        >
-                          <Stack gap='0'>
-                            <Text fontSize='sm' color='teal.700'>
-                              {todo.title}
-                            </Text>
-                            <Text fontSize='xs' color='teal.600'>
-                              類別：{category.categoryLabel} · 完成時間：{completedAtLabel}
-                            </Text>
-                          </Stack>
-                          <Button
-                            size='xs'
-                            variant='outline'
-                            colorScheme='teal'
-                            onClick={() => handleToggleDailyTodo(todo.id)}
-                          >
-                            重新開始
-                          </Button>
-                        </HStack>
-                      )
-                    })}
-                  </Stack>
-                )}
-              </Stack>
-            </Stack>
-            <Stack gap='3'>
-              <Heading size='sm'>待辦事項</Heading>
-              <Stack gap='2'>
-                <Text fontSize='xs' color='fg.muted'>
-                  待完成
-                </Text>
-                {isLoadingTodosRemote ? (
-                  <Text fontSize='sm' color='fg.muted' textAlign='center'>
-                    待辦事項載入中…
-                  </Text>
-                ) : pendingTodos.length === 0 ? (
-                  <Text fontSize='sm' color='fg.muted' textAlign='center'>
-                    尚未新增待辦事項。
-                  </Text>
-                ) : (
-                  <Stack gap='2' maxHeight='32' overflowY='auto' pr='1'>
-                    {pendingTodos.map((todo) => {
-                      const category = getCategorySnapshot(todo.categoryId)
-                      return (
-                        <HStack
-                          key={todo.id}
-                          justify='space-between'
-                          borderWidth='1px'
-                          borderRadius='md'
-                          px='3'
-                          py='2'
-                        >
-                          <Stack gap='0'>
-                            <Text fontSize='sm'>{todo.title}</Text>
-                            <Text fontSize='xs' color='fg.muted'>
-                              類別：{category.categoryLabel}
-                            </Text>
-                          </Stack>
-                          <Button
-                            size='xs'
-                            variant='solid'
-                            colorScheme='teal'
-                            onClick={() => handleToggleTodo(todo.id)}
-                          >
-                            完成
-                          </Button>
-                        </HStack>
-                      )
-                    })}
-                  </Stack>
-                )}
-              </Stack>
-              <Stack gap='2'>
-                <Text fontSize='xs' color='fg.muted'>
-                  已完成
-                </Text>
-                {isLoadingTodosRemote ? (
-                  <Text fontSize='sm' color='fg.muted' textAlign='center'>
-                    待辦事項載入中…
-                  </Text>
-                ) : completedTodos.length === 0 ? (
-                  <Text fontSize='sm' color='fg.muted' textAlign='center'>
-                    還沒有完成的待辦。
-                  </Text>
-                ) : (
-                  <Stack gap='2' maxHeight='32' overflowY='auto' pr='1'>
-                    {completedTodos.map((todo) => {
-                      const category = getCategorySnapshot(todo.categoryId)
-                      return (
-                        <HStack
-                          key={todo.id}
-                          justify='space-between'
-                          borderWidth='1px'
-                          borderRadius='md'
-                          px='3'
-                          py='2'
-                          bg='bg.subtle'
-                        >
-                          <Stack gap='0'>
-                            <Text fontSize='sm' color='fg'>
-                              {todo.title}
-                            </Text>
-                            <Text fontSize='xs' color='fg.muted'>
-                              類別：{category.categoryLabel}
-                            </Text>
-                            <Text fontサイズ='xs' color='fg.muted'>
-                              完成於：
-                              {todo.completedAt ? formatTimeOfDay(todo.completedAt) : '—'}
-                            </Text>
-                          </Stack>
-                          <Button
-                            size='xs'
-                            variant='outline'
-                            colorScheme='gray'
-                            onClick={() => handleToggleTodo(todo.id)}
-                          >
-                            還原
-                          </Button>
-                        </HStack>
-                      )
-                    })}
-                  </Stack>
-                )}
-              </Stack>
-            </Stack>
-          </Stack>
-        </Stack>
-      </Box>
-
-    </Stack>
+        <AntText>
+          確定要刪除分類「{categoryToDelete?.label ?? ''}」嗎？已建立的待辦與每日任務會保留，但會失去此分類連結。
+        </AntText>
+      </Modal>
+    </Space>
   )
 }
