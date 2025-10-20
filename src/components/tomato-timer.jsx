@@ -1146,6 +1146,8 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
                 border: category.id === selectedId ? '1px solid #1677ff' : '1px solid #d9d9d9',
                 backgroundColor: category.id === selectedId ? '#f0f5ff' : '#fff',
                 lineHeight: '20px',
+                color: category.id === selectedId ? '#0958d9' : '#434343',
+                fontWeight: category.id === selectedId ? 600 : 400,
               }}
             >
               {category.label}
