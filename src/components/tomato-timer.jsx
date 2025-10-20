@@ -86,13 +86,16 @@ export function TomatoTimer() {
   const [todos, setTodos] = useState([])
   const [newTodoTitle, setNewTodoTitle] = useState('')
   const [newTodoCategoryId, setNewTodoCategoryId] = useState(null)
-const [dailyTodos, setDailyTodos] = useState([])
-const [newDailyTodoTitle, setNewDailyTodoTitle] = useState('')
-const [newDailyTodoCategoryId, setNewDailyTodoCategoryId] = useState(null)
-const [todayKey, setTodayKey] = useState(() => getTodayKey())
-const [isLoadingDailyTasks, setIsLoadingDailyTasks] = useState(false)
-const [togglingDailyTodoId, setTogglingDailyTodoId] = useState(null)
-const [deletingDailyTodoId, setDeletingDailyTodoId] = useState(null)
+  const [dailyTodos, setDailyTodos] = useState([])
+  const [newDailyTodoTitle, setNewDailyTodoTitle] = useState('')
+  const [newDailyTodoCategoryId, setNewDailyTodoCategoryId] = useState(null)
+  const [todayKey, setTodayKey] = useState(() => getTodayKey())
+  const [isLoadingDailyTasks, setIsLoadingDailyTasks] = useState(false)
+  const [togglingDailyTodoId, setTogglingDailyTodoId] = useState(null)
+  const [deletingDailyTodoId, setDeletingDailyTodoId] = useState(null)
+  const [dailyTodoToDelete, setDailyTodoToDelete] = useState(null)
+  const [isDeleteDailyTodoModalVisible, setIsDeleteDailyTodoModalVisible] =
+    useState(false)
 const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
   const eventId = useRef(0)
   const [eventLog, setEventLog] = useState([])
@@ -945,7 +948,7 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
 
   const handleDeleteDailyTodo = async (id) => {
     const target = dailyTodos.find((todo) => todo.id === id)
-    if (!target) return
+    if (!target) return false
 
     const categorySnapshot = getCategorySnapshot(target.categoryId)
     setDeletingDailyTodoId(id)
@@ -967,6 +970,7 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
         },
         { sessionKey: sessionKeyRef.current ?? undefined },
       )
+      return true
     } catch (error) {
       if (isAuthenticated && token) {
         toaster.create({
@@ -975,9 +979,28 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
           type: 'error',
         })
       }
-      return
+      return false
     } finally {
       setDeletingDailyTodoId(null)
+    }
+  }
+
+  const requestDailyTodoDeletion = (todo) => {
+    setDailyTodoToDelete(todo)
+    setIsDeleteDailyTodoModalVisible(true)
+  }
+
+  const cancelDailyTodoDeletion = () => {
+    setIsDeleteDailyTodoModalVisible(false)
+    setDailyTodoToDelete(null)
+  }
+
+  const confirmDailyTodoDeletion = async () => {
+    if (!dailyTodoToDelete) return
+    const success = await handleDeleteDailyTodo(dailyTodoToDelete.id)
+    if (success) {
+      setIsDeleteDailyTodoModalVisible(false)
+      setDailyTodoToDelete(null)
     }
   }
 
@@ -1753,7 +1776,7 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
                                       type='text'
                                       danger
                                       icon={<LuTrash2 size={14} />}
-                                      onClick={() => handleDeleteDailyTodo(todo.id)}
+                                      onClick={() => requestDailyTodoDeletion(todo)}
                                       disabled={isToggling || isDeleting}
                                       loading={isDeleting}
                                       aria-label='刪除每日任務'
@@ -1828,7 +1851,7 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
                                       type='text'
                                       danger
                                       icon={<LuTrash2 size={14} />}
-                                      onClick={() => handleDeleteDailyTodo(todo.id)}
+                                      onClick={() => requestDailyTodoDeletion(todo)}
                                       disabled={isToggling || isDeleting}
                                       loading={isDeleting}
                                       aria-label='刪除每日任務'
@@ -1954,6 +1977,24 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
           </Card>
         </Col>
       </Row>
+      <Modal
+        title='刪除每日任務'
+        open={isDeleteDailyTodoModalVisible}
+        onOk={confirmDailyTodoDeletion}
+        onCancel={cancelDailyTodoDeletion}
+        okText='刪除'
+        okButtonProps={{ danger: true }}
+        cancelText='取消'
+        confirmLoading={
+          dailyTodoToDelete
+            ? deletingDailyTodoId === dailyTodoToDelete.id
+            : false
+        }
+      >
+        <AntText>
+          確定要刪除每日任務「{dailyTodoToDelete?.title ?? ''}」嗎？刪除後無法復原。
+        </AntText>
+      </Modal>
       <Modal
         title='刪除分類'
         open={isDeleteModalVisible}
