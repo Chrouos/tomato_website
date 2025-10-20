@@ -10,6 +10,7 @@ import {
   LuPlay,
   LuPlus,
   LuRotateCcw,
+  LuTrash2,
   LuX,
 } from 'react-icons/lu'
 import { useAuth } from '../lib/auth-context.jsx'
@@ -21,6 +22,7 @@ import {
   deleteCategory as deleteCategoryApi,
   fetchDailyTasks,
   createDailyTask as createDailyTaskApi,
+  archiveDailyTask as archiveDailyTaskApi,
   completeDailyTask as completeDailyTaskApi,
   resetDailyTask as resetDailyTaskApi,
   fetchTodos,
@@ -89,6 +91,8 @@ const [newDailyTodoTitle, setNewDailyTodoTitle] = useState('')
 const [newDailyTodoCategoryId, setNewDailyTodoCategoryId] = useState(null)
 const [todayKey, setTodayKey] = useState(() => getTodayKey())
 const [isLoadingDailyTasks, setIsLoadingDailyTasks] = useState(false)
+const [togglingDailyTodoId, setTogglingDailyTodoId] = useState(null)
+const [deletingDailyTodoId, setDeletingDailyTodoId] = useState(null)
 const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
   const eventId = useRef(0)
   const [eventLog, setEventLog] = useState([])
@@ -863,6 +867,8 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
 
     const hasCompletedToday = target.completedOn === todayKey
     const categorySnapshot = getCategorySnapshot(target.categoryId)
+    const eventType = hasCompletedToday ? 'daily-todo-reset' : 'daily-todo-complete'
+    setTogglingDailyTodoId(id)
 
     if (isAuthenticated && token) {
       try {
@@ -879,14 +885,6 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
             date: todayKey,
           })
         }
-        logEvent(
-          hasCompletedToday ? 'daily-todo-reset' : 'daily-todo-complete',
-          {
-            todoTitle: target.title,
-            ...categorySnapshot,
-          },
-          { sessionKey: sessionKeyRef.current ?? undefined },
-        )
         const updatedAt = new Date().toISOString()
         setDailyTodos((prev) =>
           prev.map((todo) =>
@@ -899,39 +897,88 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
               : todo,
           ),
         )
+        logEvent(
+          eventType,
+          {
+            todoTitle: target.title,
+            ...categorySnapshot,
+          },
+          { sessionKey: sessionKeyRef.current ?? undefined },
+        )
       } catch (error) {
         toaster.create({
           title: hasCompletedToday ? '重置每日任務失敗' : '完成每日任務失敗',
           description: error.message,
           type: 'error',
         })
+      } finally {
+        setTogglingDailyTodoId(null)
       }
       return
     }
 
-    const updatedAt = new Date().toISOString()
-    const nextCompletedOn = hasCompletedToday ? null : todayKey
+    try {
+      const updatedAt = new Date().toISOString()
+      setDailyTodos((prev) =>
+        prev.map((todo) =>
+          todo.id === id
+            ? {
+                ...todo,
+                completedOn: hasCompletedToday ? null : todayKey,
+                updatedAt,
+              }
+            : todo,
+        ),
+      )
+      logEvent(
+        eventType,
+        {
+          todoTitle: target.title,
+          ...categorySnapshot,
+        },
+        { sessionKey: sessionKeyRef.current ?? undefined },
+      )
+    } finally {
+      setTogglingDailyTodoId(null)
+    }
+  }
 
-    logEvent(
-      hasCompletedToday ? 'daily-todo-reset' : 'daily-todo-complete',
-      {
-        todoTitle: target.title,
-        ...categorySnapshot,
-      },
-      { sessionKey: sessionKeyRef.current ?? undefined },
-    )
+  const handleDeleteDailyTodo = async (id) => {
+    const target = dailyTodos.find((todo) => todo.id === id)
+    if (!target) return
 
-    setDailyTodos((prev) =>
-      prev.map((todo) =>
-        todo.id === id
-          ? {
-              ...todo,
-              completedOn: nextCompletedOn,
-              updatedAt,
-            }
-          : todo,
-      ),
-    )
+    const categorySnapshot = getCategorySnapshot(target.categoryId)
+    setDeletingDailyTodoId(id)
+
+    try {
+      if (isAuthenticated && token) {
+        await archiveDailyTaskApi({
+          token,
+          taskId: id,
+        })
+      }
+
+      setDailyTodos((prev) => prev.filter((todo) => todo.id !== id))
+      logEvent(
+        'daily-todo-delete',
+        {
+          todoTitle: target.title,
+          ...categorySnapshot,
+        },
+        { sessionKey: sessionKeyRef.current ?? undefined },
+      )
+    } catch (error) {
+      if (isAuthenticated && token) {
+        toaster.create({
+          title: '刪除每日任務失敗',
+          description: error.message,
+          type: 'error',
+        })
+      }
+      return
+    } finally {
+      setDeletingDailyTodoId(null)
+    }
   }
 
   const handleAddTodo = async () => {
@@ -1091,6 +1138,7 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
     purple: '#722ed1',
     blue: '#1677ff',
     pink: '#eb2f96',
+    red: '#f5222d',
   }
   const cardMaxHeight = 'calc(100vh - 220px)'
   const timerCardStyle = {
@@ -1540,6 +1588,11 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
                           icon: LuRotateCcw,
                           color: 'pink',
                         },
+                        'daily-todo-delete': {
+                          label: '刪除每日任務',
+                          icon: LuTrash2,
+                          color: 'red',
+                        },
                       }
                       const meta =
                         descriptors[event.type] ?? {
@@ -1575,6 +1628,8 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
                         detail = `完成今日每日任務 ${event.todoTitle}`
                       } else if (event.type === 'daily-todo-reset') {
                         detail = `重新開始每日任務 ${event.todoTitle}`
+                      } else if (event.type === 'daily-todo-delete') {
+                        detail = `刪除每日任務 ${event.todoTitle}`
                       }
 
                       const IconComponent = meta.icon
@@ -1655,34 +1710,60 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
                     </AntText>
                   ) : (
                     <div style={{ maxHeight: 160, overflowY: 'auto', paddingRight: 8 }}>
-                      <Space direction='vertical' size={8} style={{ width: '100%' }}>
+                      <Space direction='vertical' size={10} style={{ width: '100%' }}>
                         {pendingDailyTodos.map((todo) => {
                           const category = getCategorySnapshot(todo.categoryId)
+                          const isToggling = togglingDailyTodoId === todo.id
+                          const isDeleting = deletingDailyTodoId === todo.id
                           return (
                             <div
                               key={todo.id}
                               style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                border: '1px solid #f0f0f0',
-                                borderRadius: 8,
-                                padding: '8px 12px',
+                                border: '1px solid #e5e6eb',
+                                borderRadius: 12,
+                                padding: '12px 14px',
+                                background: '#fff',
+                                boxShadow: '0 4px 12px rgba(15, 39, 102, 0.05)',
                               }}
                             >
-                              <Space direction='vertical' size={0}>
-                                <AntText strong>{todo.title}</AntText>
+                              <Space direction='vertical' size={6} style={{ width: '100%' }}>
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                  }}
+                                >
+                                  <AntText strong style={{ fontSize: 14 }}>
+                                    {todo.title}
+                                  </AntText>
+                                  <Space size={4}>
+                                    <Button
+                                      size='small'
+                                      type='primary'
+                                      onClick={() => handleToggleDailyTodo(todo.id)}
+                                      disabled={isDeleting}
+                                      loading={isToggling}
+                                    >
+                                      完成
+                                    </Button>
+                                    <Button
+                                      size='small'
+                                      type='text'
+                                      danger
+                                      icon={<LuTrash2 size={14} />}
+                                      onClick={() => handleDeleteDailyTodo(todo.id)}
+                                      disabled={isToggling || isDeleting}
+                                      loading={isDeleting}
+                                      aria-label='刪除每日任務'
+                                    />
+                                  </Space>
+                                </div>
                                 <AntText type='secondary' style={{ fontSize: 12 }}>
                                   類別：{category.categoryLabel}
                                 </AntText>
                               </Space>
-                              <Button
-                                size='small'
-                                type='primary'
-                                onClick={() => handleToggleDailyTodo(todo.id)}
-                              >
-                                完成
-                              </Button>
                             </div>
                           )
                         })}
@@ -1702,44 +1783,66 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
                     </AntText>
                   ) : (
                     <div style={{ maxHeight: 160, overflowY: 'auto', paddingRight: 8 }}>
-                      <Space direction='vertical' size={8} style={{ width: '100%' }}>
+                      <Space direction='vertical' size={10} style={{ width: '100%' }}>
                         {completedDailyTodos.map((todo) => {
                           const category = getCategorySnapshot(todo.categoryId)
                           const completedAtLabel = todo.completedAt
                             ? formatTimeOfDay(todo.completedAt)
                             : '—'
+                          const isToggling = togglingDailyTodoId === todo.id
+                          const isDeleting = deletingDailyTodoId === todo.id
                           return (
-                            <Space
+                            <div
                               key={todo.id}
-                              direction='vertical'
-                              size={6}
                               style={{
-                                border: '1px solid #e6f4ff',
-                                borderRadius: 8,
-                                padding: '10px 12px',
+                                border: '1px solid #d6e4ff',
+                                borderRadius: 12,
+                                padding: '12px 14px',
                                 background: '#f0f5ff',
+                                boxShadow: '0 4px 12px rgba(15, 39, 102, 0.05)',
                               }}
                             >
-                              <Space
-                                align='center'
-                                size={8}
-                                style={{ width: '100%', justifyContent: 'space-between' }}
-                              >
-                                <AntText strong>{todo.title}</AntText>
-                                <Button
-                                  size='small'
-                                  onClick={() => handleToggleDailyTodo(todo.id)}
+                              <Space direction='vertical' size={6} style={{ width: '100%' }}>
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                  }}
                                 >
-                                  重新開始
-                                </Button>
+                                  <AntText strong style={{ fontSize: 14 }}>
+                                    {todo.title}
+                                  </AntText>
+                                  <Space size={4}>
+                                    <Button
+                                      size='small'
+                                      onClick={() => handleToggleDailyTodo(todo.id)}
+                                      disabled={isDeleting}
+                                      loading={isToggling}
+                                    >
+                                      重新開始
+                                    </Button>
+                                    <Button
+                                      size='small'
+                                      type='text'
+                                      danger
+                                      icon={<LuTrash2 size={14} />}
+                                      onClick={() => handleDeleteDailyTodo(todo.id)}
+                                      disabled={isToggling || isDeleting}
+                                      loading={isDeleting}
+                                      aria-label='刪除每日任務'
+                                    />
+                                  </Space>
+                                </div>
+                                <AntText type='secondary' style={{ fontSize: 12 }}>
+                                  類別：{category.categoryLabel}
+                                </AntText>
+                                <AntText type='secondary' style={{ fontSize: 12 }}>
+                                  完成於：{completedAtLabel}
+                                </AntText>
                               </Space>
-                              <AntText type='secondary' style={{ fontSize: 12 }}>
-                                類別：{category.categoryLabel}
-                              </AntText>
-                              <AntText type='secondary' style={{ fontSize: 12 }}>
-                                完成於：{completedAtLabel}
-                              </AntText>
-                            </Space>
+                            </div>
                           )
                         })}
                       </Space>
