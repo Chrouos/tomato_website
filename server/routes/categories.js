@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import authenticate from '../middleware/authMiddleware.js';
+import ensureUserExists from '../middleware/ensureUserExists.js';
 import optionalAuthenticate from '../middleware/optionalAuthMiddleware.js';
 import {
   ensureDefaultCategories,
@@ -83,7 +84,7 @@ router.get('/', optionalAuthenticate, async (req, res) => {
  *       500:
  *         description: 伺服器錯誤
  */
-router.post('/', authenticate, async (req, res) => {
+router.post('/', authenticate, ensureUserExists, async (req, res) => {
   try {
     const { label } = req.body ?? {};
     const category = await createCategory({
@@ -133,7 +134,7 @@ router.post('/', authenticate, async (req, res) => {
  *       500:
  *         description: 伺服器錯誤
  */
-router.delete('/:id', authenticate, async (req, res) => {
+router.delete('/:id', authenticate, ensureUserExists, async (req, res) => {
   try {
     const categoryId = req.params.id;
     const deleted = await deleteCategory({

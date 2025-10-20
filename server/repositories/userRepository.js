@@ -29,6 +29,20 @@ export const findByEmail = async (email) => {
   return mapUser(result.rows[0]);
 };
 
+export const findById = async (id) => {
+  const result = await query(
+    `
+      SELECT id, email, name, password_hash, provider, provider_id, created_at, updated_at
+      FROM users
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [id],
+  );
+
+  return mapUser(result.rows[0]);
+};
+
 export const createUser = async ({ email, name, passwordHash, provider, providerId }) => {
   const result = await query(
     `
@@ -72,6 +86,7 @@ export const updatePassword = async ({ userId, passwordHash }) => {
 
 export default {
   findByEmail,
+  findById,
   createUser,
   updateUserProvider,
   updatePassword,

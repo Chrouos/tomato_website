@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import authenticate from '../middleware/authMiddleware.js';
+import ensureUserExists from '../middleware/ensureUserExists.js';
 import {
   listDailyTasks,
   createDailyTask,
@@ -31,7 +32,7 @@ const toIsoDate = (value) => {
  *     description: 每日任務管理
  */
 
-router.use(authenticate);
+router.use(authenticate, ensureUserExists);
 
 /**
  * @openapi

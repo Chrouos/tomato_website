@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import authenticate from '../middleware/authMiddleware.js';
+import ensureUserExists from '../middleware/ensureUserExists.js';
 import { createEvent, listEventsByUser } from '../repositories/eventRepository.js';
 
 const router = Router();
@@ -66,7 +67,7 @@ const router = Router();
  *       401:
  *         description: 未授權
  */
-router.get('/', authenticate, async (req, res) => {
+router.get('/', authenticate, ensureUserExists, async (req, res) => {
   const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 200, 1), 500);
   const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
   const from = req.query.from ? new Date(req.query.from) : undefined;
@@ -120,7 +121,7 @@ router.get('/', authenticate, async (req, res) => {
  *       401:
  *         description: 未授權
  */
-router.post('/', authenticate, async (req, res) => {
+router.post('/', authenticate, ensureUserExists, async (req, res) => {
   try {
     const { eventType, sessionKey, payload, occurredAt } = req.body ?? {};
 

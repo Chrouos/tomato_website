@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import authenticate from '../middleware/authMiddleware.js';
+import ensureUserExists from '../middleware/ensureUserExists.js';
 import {
   listTodos,
   createTodo,
@@ -17,7 +18,7 @@ const router = Router();
  *     description: 一般待辦事項管理
  */
 
-router.use(authenticate);
+router.use(authenticate, ensureUserExists);
 
 /**
  * @openapi
