@@ -1460,7 +1460,7 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
     >
       <Row gutter={[24, 24]}>
         <Col xs={24} lg={12} xl={8} xxl={8} style={{ minWidth: 0 }}>
-          <Card style={timerCardStyle} bodyStyle={cardBodyStyle}>
+          <Card style={timerCardStyle} styles={{ body: cardBodyStyle }}>
             <Space direction='vertical' size={24} style={{ width: '100%' }}>
               <Space direction='vertical' size={8} align='center'>
                 <Title level={3} style={{ margin: 0 }}>
@@ -1511,7 +1511,7 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
         </Col>
 
         <Col xs={24} lg={12} xl={8} xxl={8} style={{ minWidth: 0 }}>
-          <Card style={sideCardStyle} bodyStyle={cardBodyStyle}>
+          <Card style={sideCardStyle} styles={{ body: cardBodyStyle }}>
             <Space direction='vertical' size={24} style={{ width: '100%' }}>
               <Space direction='vertical' size={12} align='center'>
                 <Title level={4} style={{ margin: 0 }}>
@@ -1703,8 +1703,8 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
           </Card>
         </Col>
 
-        <Col xs={24} lg={24} xl={8} xxl={8} style={{ minWidth: 0 }}>
-          <Card style={sideCardStyle} bodyStyle={cardBodyStyle}>
+        <Col xs={24} lg={24} xl={24} xxl={24} style={{ minWidth: 0 }}>
+          <Card style={sideCardStyle} styles={{ body: cardBodyStyle }}>
             <Space direction='vertical' size={24} style={{ width: '100%' }}>
               <Space direction='vertical' size={8} align='center'>
                 <Title level={4} style={{ margin: 0 }}>
