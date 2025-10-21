@@ -29,6 +29,7 @@ import {
   createTodo as createTodoApi,
   completeTodo as completeTodoApi,
   reopenTodo as reopenTodoApi,
+  archiveTodo as archiveTodoApi,
 } from '../lib/api.js'
 import { toaster } from './ui/toaster.jsx'
 
@@ -96,7 +97,11 @@ export function TomatoTimer() {
   const [dailyTodoToDelete, setDailyTodoToDelete] = useState(null)
   const [isDeleteDailyTodoModalVisible, setIsDeleteDailyTodoModalVisible] =
     useState(false)
-const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
+  const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
+  const [deletingTodoId, setDeletingTodoId] = useState(null)
+  const [todoToDelete, setTodoToDelete] = useState(null)
+  const [isDeleteTodoModalVisible, setIsDeleteTodoModalVisible] =
+    useState(false)
   const eventId = useRef(0)
   const [eventLog, setEventLog] = useState([])
   const [, setIsSyncingSession] = useState(false)
@@ -1004,6 +1009,64 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
     }
   }
 
+  const handleDeleteTodo = async (id) => {
+    const target = todos.find((todo) => todo.id === id)
+    if (!target) return false
+
+    const categorySnapshot = getCategorySnapshot(target.categoryId)
+    setDeletingTodoId(id)
+
+    try {
+      if (isAuthenticated && token) {
+        await archiveTodoApi({
+          token,
+          todoId: id,
+        })
+      }
+
+      setTodos((prev) => prev.filter((todo) => todo.id !== id))
+      logEvent(
+        'todo-delete',
+        {
+          todoTitle: target.title,
+          ...categorySnapshot,
+        },
+        { sessionKey: sessionKeyRef.current ?? undefined },
+      )
+      return true
+    } catch (error) {
+      if (isAuthenticated && token) {
+        toaster.create({
+          title: '刪除待辦失敗',
+          description: error.message,
+          type: 'error',
+        })
+      }
+      return false
+    } finally {
+      setDeletingTodoId(null)
+    }
+  }
+
+  const requestTodoDeletion = (todo) => {
+    setTodoToDelete(todo)
+    setIsDeleteTodoModalVisible(true)
+  }
+
+  const cancelTodoDeletion = () => {
+    setIsDeleteTodoModalVisible(false)
+    setTodoToDelete(null)
+  }
+
+  const confirmTodoDeletion = async () => {
+    if (!todoToDelete) return
+    const success = await handleDeleteTodo(todoToDelete.id)
+    if (success) {
+      setIsDeleteTodoModalVisible(false)
+      setTodoToDelete(null)
+    }
+  }
+
   const handleAddTodo = async () => {
     const trimmed = newTodoTitle.trim()
     if (!trimmed || !newTodoCategoryId) return
@@ -1206,6 +1269,7 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
   const taskColumnTitleStyle = {
     fontSize: 13,
     fontWeight: 600,
+    paddingTop: 10,
     color: '#1f1f1f',
     letterSpacing: 0.4,
   }
@@ -1217,14 +1281,20 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
   const taskCardBaseStyle = {
     width: '100%',
     minWidth: 0,
-    border: '1px solid #d6e4ff',
+    border: '1px solid #d9d9d9',
     borderRadius: 12,
     padding: '12px 14px',
-    background: '#f0f5ff',
+    background: '#f5fffe',
     boxShadow: '0 4px 12px rgba(15, 39, 102, 0.05)',
     display: 'flex',
     flexDirection: 'column',
     gap: 6,
+  }
+  
+  const taskCardCompletedStyle = {
+    ...taskCardBaseStyle,
+    border: '1px solid #b7eb8f',
+    background: '#f6ffed',
   }
   const renderCategorySelection = ({ selectedId, onSelect, emptyText }) => {
     if (categories.length === 0) {
@@ -1632,6 +1702,11 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
                           icon: LuRotateCcw,
                           color: 'gray',
                         },
+                        'todo-delete': {
+                          label: '刪除待辦',
+                          icon: LuTrash2,
+                          color: 'red',
+                        },
                         'daily-todo-add': {
                           label: '新增每日任務',
                           icon: LuClipboardList,
@@ -1681,6 +1756,8 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
                         detail = `完成 ${event.todoTitle}`
                       } else if (event.type === 'todo-reopen') {
                         detail = `重新開啟 ${event.todoTitle}`
+                      } else if (event.type === 'todo-delete') {
+                        detail = `刪除待辦 ${event.todoTitle}`
                       } else if (event.type === 'daily-todo-add') {
                         detail = `新增每日任務 ${event.todoTitle}`
                       } else if (event.type === 'daily-todo-complete') {
@@ -1842,6 +1919,7 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
                         <div style={taskListStyle}>
                           {pendingTodos.map((todo) => {
                             const category = getCategorySnapshot(todo.categoryId)
+                            const isDeleting = deletingTodoId === todo.id
                             return (
                               <div key={todo.id} style={taskCardBaseStyle}>
                                 <Space direction='vertical' size={6} style={{ width: '100%' }}>
@@ -1861,9 +1939,20 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
                                         size='small'
                                         type='primary'
                                         onClick={() => handleToggleTodo(todo.id)}
+                                        disabled={isDeleting}
                                       >
                                         完成
                                       </Button>
+                                      <Button
+                                        size='small'
+                                        type='text'
+                                        danger
+                                        icon={<LuTrash2 size={14} />}
+                                        onClick={() => requestTodoDeletion(todo)}
+                                        disabled={isDeleting}
+                                        loading={isDeleting}
+                                        aria-label='刪除待辦事項'
+                                      />
                                     </Space>
                                   </div>
                                   <AntText type='secondary' style={{ fontSize: 12 }}>
@@ -1876,10 +1965,12 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
                         </div>
                       )}
                     </div>
+                    </div>
 
+<div>
                       <Divider/>
 
-                     <div style={taskColumnStyle}>
+                    <div style={taskColumnStyle}>
                       <AntText style={taskColumnTitleStyle}>每日任務已完成</AntText>
                       {isLoadingDailyTasks ? (
                         <AntText type='secondary' style={{ textAlign: 'center' }}>
@@ -1899,7 +1990,7 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
                             const isToggling = togglingDailyTodoId === todo.id
                             const isDeleting = deletingDailyTodoId === todo.id
                             return (
-                              <div key={todo.id} style={taskCardBaseStyle}>
+                              <div key={todo.id} style={taskCardCompletedStyle}>
                                 <Space direction='vertical' size={6} style={{ width: '100%' }}>
                                   <div
                                     style={{
@@ -1949,7 +2040,7 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
                     <div style={taskColumnStyle}>
                       <AntText style={taskColumnTitleStyle}>待辦事項已完成</AntText>
                       {isLoadingTodosRemote ? (
-                        <AntText type='secondary' style={{ textAlign: 'center' }}>
+                        <AntText type='secondary' style={{ textAlign: 'center'}}>
                           待辦事項載入中…
                         </AntText>
                       ) : completedTodos.length === 0 ? (
@@ -1960,8 +2051,9 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
                         <div style={taskListStyle}>
                           {completedTodos.map((todo) => {
                             const category = getCategorySnapshot(todo.categoryId)
+                            const isDeleting = deletingTodoId === todo.id
                             return (
-                              <div key={todo.id} style={taskCardBaseStyle}>
+                              <div key={todo.id} style={taskCardCompletedStyle}>
                                 <Space direction='vertical' size={6} style={{ width: '100%' }}>
                                   <div
                                     style={{
@@ -1975,9 +2067,23 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
                                       {todo.title}
                                     </AntText>
                                     <Space size={4}>
-                                      <Button size='small' onClick={() => handleToggleTodo(todo.id)}>
+                                      <Button
+                                        size='small'
+                                        onClick={() => handleToggleTodo(todo.id)}
+                                        disabled={isDeleting}
+                                      >
                                         還原
                                       </Button>
+                                      <Button
+                                        size='small'
+                                        type='text'
+                                        danger
+                                        icon={<LuTrash2 size={14} />}
+                                        onClick={() => requestTodoDeletion(todo)}
+                                        disabled={isDeleting}
+                                        loading={isDeleting}
+                                        aria-label='刪除待辦事項'
+                                      />
                                     </Space>
                                   </div>
                                   <AntText type='secondary' style={{ fontSize: 12 }}>
@@ -2000,6 +2106,22 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
           </Card>
         </Col>
       </Row>
+      <Modal
+        title='刪除待辦事項'
+        open={isDeleteTodoModalVisible}
+        onOk={confirmTodoDeletion}
+        onCancel={cancelTodoDeletion}
+        okText='刪除'
+        okButtonProps={{ danger: true }}
+        cancelText='取消'
+        confirmLoading={
+          todoToDelete ? deletingTodoId === todoToDelete.id : false
+        }
+      >
+        <AntText>
+          確定要刪除待辦事項「{todoToDelete?.title ?? ''}」嗎？刪除後無法復原。
+        </AntText>
+      </Modal>
       <Modal
         title='刪除每日任務'
         open={isDeleteDailyTodoModalVisible}

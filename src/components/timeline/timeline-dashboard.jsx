@@ -5,12 +5,11 @@ import {
   Calendar as AntdCalendar,
   Card,
   Col,
-  DatePicker,
-  Divider,
   Empty,
   InputNumber,
   List,
   Row,
+  Segmented,
   Space,
   Spin,
   Timeline,
@@ -70,6 +69,7 @@ function getEventLabel(eventType) {
     'todo-add': '新增待辦',
     'todo-complete': '完成待辦',
     'todo-reopen': '還原待辦',
+    'todo-delete': '刪除待辦',
     'daily-todo-add': '新增每日任務',
     'daily-todo-complete': '完成每日任務',
     'daily-todo-reset': '重新開始每日任務',
@@ -150,7 +150,7 @@ export function TimelineDashboard() {
   })
 
   const { Title, Paragraph, Text } = Typography
-  const { RangePicker } = DatePicker
+  const [activeRangeKey, setActiveRangeKey] = useState('7d')
 
   const [calendarValue, setCalendarValue] = useState(() =>
     dayjs(filters.to || formatDateInput(new Date())),
@@ -159,14 +159,6 @@ export function TimelineDashboard() {
     dayjs(filters.to || formatDateInput(new Date())),
   )
 
-  const handleDateRangeChange = (dates) => {
-    setFilters((prev) => ({
-      ...prev,
-      from: dates && dates[0] ? dates[0].format('YYYY-MM-DD') : '',
-      to: dates && dates[1] ? dates[1].format('YYYY-MM-DD') : '',
-    }))
-  }
-
   const handleMinHoursChange = (value) => {
     setFilters((prev) => ({
       ...prev,
@@ -174,12 +166,61 @@ export function TimelineDashboard() {
     }))
   }
 
-  const dateRangeValue = useMemo(() => {
-    const start = filters.from ? dayjs(filters.from) : null
-    const end = filters.to ? dayjs(filters.to) : null
-    if (!start && !end) return null
-    return [start, end]
-  }, [filters.from, filters.to])
+  const setDateRange = useCallback((from, to) => {
+    setFilters((prev) => ({
+      ...prev,
+      from: from ? from.format('YYYY-MM-DD') : '',
+      to: to ? to.format('YYYY-MM-DD') : '',
+    }))
+  }, [])
+
+  const applyQuickRange = useCallback(
+    (key) => {
+      const today = dayjs()
+      if (key === 'today') {
+        setDateRange(today, today)
+        setSelectedDate(today)
+        setCalendarValue(today)
+        return
+      }
+      if (key === '7d') {
+        const start = today.subtract(6, 'day')
+        setDateRange(start, today)
+        setSelectedDate(today)
+        setCalendarValue(today)
+        return
+      }
+      if (key === '14d') {
+        const start = today.subtract(13, 'day')
+        setDateRange(start, today)
+        setSelectedDate(today)
+        setCalendarValue(today)
+        return
+      }
+      if (key === 'month') {
+        const start = today.startOf('month')
+        const end = today.endOf('month')
+        setDateRange(start, end)
+        setSelectedDate(today)
+        setCalendarValue(today)
+      }
+    },
+    [setDateRange],
+  )
+
+  useEffect(() => {
+    applyQuickRange('7d')
+  }, [applyQuickRange])
+
+  const quickRangeOptions = useMemo(
+    () => [
+      { label: '今日', value: 'today' },
+      { label: '最近 7 天', value: '7d' },
+      { label: '最近 14 天', value: '14d' },
+      { label: '本月', value: 'month' },
+    ],
+    [],
+  )
 
   useEffect(() => {
     const rangeStart = filters.from ? dayjs(filters.from) : null
@@ -396,19 +437,25 @@ export function TimelineDashboard() {
         </Paragraph>
       </Space>
 
-      <Card bodyStyle={{ padding: 16 }}>
+      <Card styles={{ body: { padding: 16 } }}>
         <Row gutter={[16, 16]} align='bottom'>
-          <Col xs={24} md={12} lg={10}>
+          <Col xs={24} md={16} lg={12}>
             <Space direction='vertical' size={8} style={{ width: '100%' }}>
               <Text type='secondary' style={{ fontSize: 12 }}>
-                日期範圍
+                快速範圍
               </Text>
-              <RangePicker
-                value={dateRangeValue}
-                allowClear
-                style={{ width: '100%' }}
-                onChange={handleDateRangeChange}
+              <Segmented
+                block
+                value={quickRangeOptions.some((item) => item.value === activeRangeKey) ? activeRangeKey : undefined}
+                options={quickRangeOptions}
+                onChange={(value) => {
+                  setActiveRangeKey(value)
+                  applyQuickRange(value)
+                }}
               />
+              <Text type='secondary' style={{ fontSize: 12 }}>
+                也可以直接在右側行事曆點選日期檢視當日詳情。
+              </Text>
             </Space>
           </Col>
           <Col xs={24} md={8} lg={6}>
@@ -422,17 +469,10 @@ export function TimelineDashboard() {
                 value={filters.minHours !== '' ? Number(filters.minHours) : null}
                 onChange={handleMinHoursChange}
               />
+              <Button onClick={() => setFilters((prev) => ({ ...prev }))} loading={isLoading}>
+                重新整理
+              </Button>
             </Space>
-          </Col>
-          <Col
-            xs={24}
-            md={4}
-            lg={4}
-            style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-end' }}
-          >
-            <Button onClick={() => setFilters((prev) => ({ ...prev }))} loading={isLoading}>
-              重新整理
-            </Button>
           </Col>
         </Row>
       </Card>
@@ -467,7 +507,9 @@ export function TimelineDashboard() {
       <Row gutter={[16, 16]} style={{ flex: 1, minHeight: 0 }}>
         <Col xs={24} xl={12} style={{ display: 'flex', minHeight: 0 }}>
           <Card
-            bodyStyle={{ padding: 16, height: '100%', display: 'flex', flexDirection: 'column' }}
+            styles={{
+              body: { padding: 16, height: '100%', display: 'flex', flexDirection: 'column' },
+            }}
             style={{ width: '100%' }}
           >
             <Spin spinning={isLoading}>
@@ -475,24 +517,28 @@ export function TimelineDashboard() {
                 fullscreen={false}
                 value={calendarValue}
                 onSelect={(value) => {
+                  setActiveRangeKey('custom')
                   setSelectedDate(value)
                   setCalendarValue(value)
+                  setDateRange(value, value)
                 }}
                 onPanelChange={(value) => setCalendarValue(value)}
-                dateFullCellRender={renderDateCell}
+                fullCellRender={renderDateCell}
               />
             </Spin>
           </Card>
         </Col>
         <Col xs={24} xl={12} style={{ display: 'flex', minHeight: 0 }}>
           <Card
-            bodyStyle={{
-              padding: 16,
-              height: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 20,
-              overflow: 'hidden',
+            styles={{
+              body: {
+                padding: 16,
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 20,
+                overflow: 'hidden',
+              },
             }}
             style={{ width: '100%' }}
           >
