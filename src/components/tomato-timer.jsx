@@ -1591,7 +1591,11 @@ export function TomatoTimer() {
                 </Space>
               </Space>
 
-              <Space size={12} wrap style={{ justifyContent: 'center' }}>
+              <Space
+                size={12}
+                wrap
+                style={{ width: '100%', justifyContent: 'center', display: 'flex' }}
+              >
                 <Button
                   type='primary'
                   size='large'

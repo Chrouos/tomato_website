@@ -3,10 +3,10 @@ import { Link as RouterLink, Routes, Route, Navigate, useLocation } from 'react-
 import {
   Box,
   Button,
+  ButtonGroup,
   Container,
   Heading,
   HStack,
-  Link,
   Stack,
   Text,
   VStack,
@@ -17,6 +17,7 @@ import { AuthShell } from './components/auth/auth-shell.jsx'
 import { useAuth } from './lib/auth-context.jsx'
 import TimerPage from './pages/TimerPage.jsx'
 import TimelinePage from './pages/TimelinePage.jsx'
+import { LuClock3, LuListTree } from 'react-icons/lu'
 
 export default function App() {
   const { isAuthenticated, user, logout } = useAuth()
@@ -28,8 +29,8 @@ export default function App() {
 
   const navLinks = useMemo(
     () => [
-      { to: '/', label: '番茄鐘' },
-      { to: '/timeline', label: '時間軸' },
+      { to: '/', label: '番茄鐘', icon: LuClock3 },
+      { to: '/timeline', label: '時間軸', icon: LuListTree },
     ],
     [],
   )
@@ -53,38 +54,43 @@ export default function App() {
 
   return (
     <>
-      <Container height='' py='6' overflow='hidden'>
+      <Container  py='6' overflow='hidden'>
         <VStack gap='6' height='100%' maxH='100%' align='stretch'>
-          <HStack justify='space-between' align='center' flexWrap='wrap' gap='4'>
-            <Stack gap='0'>
+          <Stack
+            direction={{ base: 'column', md: 'row' }}
+            justify='space-between'
+            align={{ base: 'flex-start', md: 'center' }}
+            spacing={{ base: 4, md: 6 }}
+          >
+            <Stack spacing={0}>
               <Heading size='lg'>Tomato Website</Heading>
             </Stack>
-            <HStack gap='3' flexWrap='wrap'>
-              {navLinks.map((link) => {
-                const isActive = location.pathname === link.to
-                return (
-                  <Link
-                    as={RouterLink}
-                    key={link.to}
-                    to={link.to}
-                    px='3'
-                    py='2'
-                    borderRadius='md'
-                    fontWeight='semibold'
-                    bg={isActive ? 'primary.solid' : 'transparent'}
-                    color={isActive ? 'white' : 'fg.muted'}
-                    _hover={{ bg: isActive ? 'primary.solid' : 'bg.muted' }}
-                  >
-                    {link.label}
-                  </Link>
-                )
-              })}
+            <HStack spacing={{ base: 2, md: 3 }} wrap='wrap'>
+              <ButtonGroup size='sm' variant='ghost'>
+                {navLinks.map((link) => {
+                  const isActive = location.pathname === link.to
+                  const Icon = link.icon
+                  return (
+                    <Button
+                      key={link.to}
+                      as={RouterLink}
+                      to={link.to}
+                      variant={isActive ? 'solid' : 'ghost'}
+                      colorScheme='blue'
+                      borderRadius='full'
+                      leftIcon={<Icon size={16} />}
+                    >
+                      {link.label}
+                    </Button>
+                  )
+                })}
+              </ButtonGroup>
               <Button size='sm' variant='outline' onClick={handleLogout}>
                 登出
               </Button>
               <ColorModeButton />
             </HStack>
-          </HStack>
+          </Stack>
           <Box flex='1' minH='0' overflow='hidden'>
             <Routes>
               <Route path='/' element={<TimerPage />} />
