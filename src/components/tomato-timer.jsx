@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Card, Collapse, Col, Input, InputNumber, Modal, Row, Space, Spin, Tag, Typography } from 'antd'
+import { Button, Card, Collapse, Col, Input, InputNumber, Modal, Row, Space, Spin, Tag, Typography, Divider } from 'antd'
 import {
   LuCalendar,
   LuClipboardList,
@@ -1819,8 +1819,68 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
                         </div>
                       )}
                     </div>
+                   
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <Title level={5} style={{ margin: 0 }}>
+                    待辦事項
+                  </Title>
+                  <div style={taskColumnsLayoutStyle}>
                     <div style={taskColumnStyle}>
-                      <AntText style={taskColumnTitleStyle}>已完成</AntText>
+                      <AntText style={taskColumnTitleStyle}>待完成</AntText>
+                      {isLoadingTodosRemote ? (
+                        <AntText type='secondary' style={{ textAlign: 'center' }}>
+                          待辦事項載入中…
+                        </AntText>
+                      ) : pendingTodos.length === 0 ? (
+                        <AntText type='secondary' style={{ textAlign: 'center' }}>
+                          尚未新增待辦事項。
+                        </AntText>
+                      ) : (
+                        <div style={taskListStyle}>
+                          {pendingTodos.map((todo) => {
+                            const category = getCategorySnapshot(todo.categoryId)
+                            return (
+                              <div key={todo.id} style={taskCardBaseStyle}>
+                                <Space direction='vertical' size={6} style={{ width: '100%' }}>
+                                  <div
+                                    style={{
+                                      display: 'flex',
+                                      justifyContent: 'space-between',
+                                      alignItems: 'center',
+                                      gap: 8,
+                                    }}
+                                  >
+                                    <AntText strong style={{ fontSize: 14 }}>
+                                      {todo.title}
+                                    </AntText>
+                                    <Space size={4}>
+                                      <Button
+                                        size='small'
+                                        type='primary'
+                                        onClick={() => handleToggleTodo(todo.id)}
+                                      >
+                                        完成
+                                      </Button>
+                                    </Space>
+                                  </div>
+                                  <AntText type='secondary' style={{ fontSize: 12 }}>
+                                    類別：{category.categoryLabel}
+                                  </AntText>
+                                </Space>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                      <Divider/>
+
+                     <div style={taskColumnStyle}>
+                      <AntText style={taskColumnTitleStyle}>每日任務已完成</AntText>
                       {isLoadingDailyTasks ? (
                         <AntText type='secondary' style={{ textAlign: 'center' }}>
                           每日任務載入中…
@@ -1886,64 +1946,8 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
                         </div>
                       )}
                     </div>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <Title level={5} style={{ margin: 0 }}>
-                    待辦事項
-                  </Title>
-                  <div style={taskColumnsLayoutStyle}>
                     <div style={taskColumnStyle}>
-                      <AntText style={taskColumnTitleStyle}>待完成</AntText>
-                      {isLoadingTodosRemote ? (
-                        <AntText type='secondary' style={{ textAlign: 'center' }}>
-                          待辦事項載入中…
-                        </AntText>
-                      ) : pendingTodos.length === 0 ? (
-                        <AntText type='secondary' style={{ textAlign: 'center' }}>
-                          尚未新增待辦事項。
-                        </AntText>
-                      ) : (
-                        <div style={taskListStyle}>
-                          {pendingTodos.map((todo) => {
-                            const category = getCategorySnapshot(todo.categoryId)
-                            return (
-                              <div key={todo.id} style={taskCardBaseStyle}>
-                                <Space direction='vertical' size={6} style={{ width: '100%' }}>
-                                  <div
-                                    style={{
-                                      display: 'flex',
-                                      justifyContent: 'space-between',
-                                      alignItems: 'center',
-                                      gap: 8,
-                                    }}
-                                  >
-                                    <AntText strong style={{ fontSize: 14 }}>
-                                      {todo.title}
-                                    </AntText>
-                                    <Space size={4}>
-                                      <Button
-                                        size='small'
-                                        type='primary'
-                                        onClick={() => handleToggleTodo(todo.id)}
-                                      >
-                                        完成
-                                      </Button>
-                                    </Space>
-                                  </div>
-                                  <AntText type='secondary' style={{ fontSize: 12 }}>
-                                    類別：{category.categoryLabel}
-                                  </AntText>
-                                </Space>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-                    <div style={taskColumnStyle}>
-                      <AntText style={taskColumnTitleStyle}>已完成</AntText>
+                      <AntText style={taskColumnTitleStyle}>待辦事項已完成</AntText>
                       {isLoadingTodosRemote ? (
                         <AntText type='secondary' style={{ textAlign: 'center' }}>
                           待辦事項載入中…
