@@ -1751,7 +1751,7 @@ const [isLoadingTodosRemote, setIsLoadingTodosRemote] = useState(false)
                 </AntText>
               </Space>
 
-              <Space direction='vertical' size={20}>
+              <Space direction='vertical' size={20} style={{ width: '100%' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   <Title level={5} style={{ margin: 0 }}>
                     今日每日任務

@@ -53,7 +53,7 @@ export default function App() {
 
   return (
     <>
-      <Container height='100vh' py='6' overflow='hidden'>
+      <Container height='' py='6' overflow='hidden'>
         <VStack gap='6' height='100%' maxH='100%' align='stretch'>
           <HStack justify='space-between' align='center' flexWrap='wrap' gap='4'>
             <Stack gap='0'>
