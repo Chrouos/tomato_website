@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Card, Collapse, Col, Input, InputNumber, Modal, Row, Space, Spin, Tag, Typography, Divider } from 'antd'
+import { Button, Card, Collapse, Col, Input, InputNumber, Modal, Row, Space, Spin, Tag, Typography } from 'antd'
 import {
   LuCalendar,
   LuClipboardList,
@@ -1284,13 +1284,12 @@ export function TomatoTimer() {
     border: '1px solid #d9d9d9',
     borderRadius: 12,
     padding: '12px 14px',
-    background: '#f5fffe',
+    background: '#fafafa',
     boxShadow: '0 4px 12px rgba(15, 39, 102, 0.05)',
     display: 'flex',
     flexDirection: 'column',
     gap: 6,
   }
-  
   const taskCardCompletedStyle = {
     ...taskCardBaseStyle,
     border: '1px solid #b7eb8f',
@@ -1900,7 +1899,73 @@ export function TomatoTimer() {
                         </div>
                       )}
                     </div>
-                   
+                    <div style={taskColumnStyle}>
+                      <AntText style={taskColumnTitleStyle}>已完成</AntText>
+                      {isLoadingDailyTasks ? (
+                        <AntText type='secondary' style={{ textAlign: 'center' }}>
+                          每日任務載入中…
+                        </AntText>
+                      ) : completedDailyTodos.length === 0 ? (
+                        <AntText type='secondary' style={{ textAlign: 'center' }}>
+                          尚未有完成的每日任務。
+                        </AntText>
+                      ) : (
+                        <div style={taskListStyle}>
+                          {completedDailyTodos.map((todo) => {
+                            const category = getCategorySnapshot(todo.categoryId)
+                            const completedAtLabel = todo.completedAt
+                              ? formatTimeOfDay(todo.completedAt)
+                              : '—'
+                            const isToggling = togglingDailyTodoId === todo.id
+                            const isDeleting = deletingDailyTodoId === todo.id
+                            return (
+                              <div key={todo.id} style={taskCardCompletedStyle}>
+                                <Space direction='vertical' size={6} style={{ width: '100%' }}>
+                                  <div
+                                    style={{
+                                      display: 'flex',
+                                      justifyContent: 'space-between',
+                                      alignItems: 'center',
+                                      gap: 8,
+                                    }}
+                                  >
+                                    <AntText strong style={{ fontSize: 14 }}>
+                                      {todo.title}
+                                    </AntText>
+                                    <Space size={4}>
+                                      <Button
+                                        size='small'
+                                        onClick={() => handleToggleDailyTodo(todo.id)}
+                                        disabled={isDeleting}
+                                        loading={isToggling}
+                                      >
+                                        重新開始
+                                      </Button>
+                                      <Button
+                                        size='small'
+                                        type='text'
+                                        danger
+                                        icon={<LuTrash2 size={14} />}
+                                        onClick={() => requestDailyTodoDeletion(todo)}
+                                        disabled={isToggling || isDeleting}
+                                        loading={isDeleting}
+                                        aria-label='刪除每日任務'
+                                      />
+                                    </Space>
+                                  </div>
+                                  <AntText type='secondary' style={{ fontSize: 12 }}>
+                                    類別：{category.categoryLabel}
+                                  </AntText>
+                                  <AntText type='secondary' style={{ fontSize: 12 }}>
+                                    完成於：{completedAtLabel}
+                                  </AntText>
+                                </Space>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -1969,82 +2034,10 @@ export function TomatoTimer() {
                         </div>
                       )}
                     </div>
-                    </div>
-
-<div>
-                      <Divider/>
-
                     <div style={taskColumnStyle}>
-                      <AntText style={taskColumnTitleStyle}>每日任務已完成</AntText>
-                      {isLoadingDailyTasks ? (
-                        <AntText type='secondary' style={{ textAlign: 'center' }}>
-                          每日任務載入中…
-                        </AntText>
-                      ) : completedDailyTodos.length === 0 ? (
-                        <AntText type='secondary' style={{ textAlign: 'center' }}>
-                          尚未有完成的每日任務。
-                        </AntText>
-                      ) : (
-                        <div style={taskListStyle}>
-                          {completedDailyTodos.map((todo) => {
-                            const category = getCategorySnapshot(todo.categoryId)
-                            const completedAtLabel = todo.completedAt
-                              ? formatTimeOfDay(todo.completedAt)
-                              : '—'
-                            const isToggling = togglingDailyTodoId === todo.id
-                            const isDeleting = deletingDailyTodoId === todo.id
-                            return (
-                              <div key={todo.id} style={taskCardCompletedStyle}>
-                                <Space direction='vertical' size={6} style={{ width: '100%' }}>
-                                  <div
-                                    style={{
-                                      display: 'flex',
-                                      justifyContent: 'space-between',
-                                      alignItems: 'center',
-                                      gap: 8,
-                                    }}
-                                  >
-                                    <AntText strong style={{ fontSize: 14 }}>
-                                      {todo.title}
-                                    </AntText>
-                                    <Space size={4}>
-                                      <Button
-                                        size='small'
-                                        onClick={() => handleToggleDailyTodo(todo.id)}
-                                        disabled={isDeleting}
-                                        loading={isToggling}
-                                      >
-                                        重新開始
-                                      </Button>
-                                      <Button
-                                        size='small'
-                                        type='text'
-                                        danger
-                                        icon={<LuTrash2 size={14} />}
-                                        onClick={() => requestDailyTodoDeletion(todo)}
-                                        disabled={isToggling || isDeleting}
-                                        loading={isDeleting}
-                                        aria-label='刪除每日任務'
-                                      />
-                                    </Space>
-                                  </div>
-                                  <AntText type='secondary' style={{ fontSize: 12 }}>
-                                    類別：{category.categoryLabel}
-                                  </AntText>
-                                  <AntText type='secondary' style={{ fontSize: 12 }}>
-                                    完成於：{completedAtLabel}
-                                  </AntText>
-                                </Space>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-                    <div style={taskColumnStyle}>
-                      <AntText style={taskColumnTitleStyle}>待辦事項已完成</AntText>
+                      <AntText style={taskColumnTitleStyle}>已完成</AntText>
                       {isLoadingTodosRemote ? (
-                        <AntText type='secondary' style={{ textAlign: 'center'}}>
+                        <AntText type='secondary' style={{ textAlign: 'center' }}>
                           待辦事項載入中…
                         </AntText>
                       ) : completedTodos.length === 0 ? (

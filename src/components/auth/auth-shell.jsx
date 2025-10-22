@@ -1,18 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import {
-  Alert,
-  Box,
-  Button,
-  Field,
-  Flex,
-  Heading,
-  HStack,
-  Input,
-  Link,
-  Stack,
-  Text,
-  VStack,
-} from '@chakra-ui/react'
+import { Alert, Button, Form, Input, Space, Tabs, Typography, Divider } from 'antd'
 import {
   loginWithEmail,
   registerWithEmail,
@@ -34,6 +21,8 @@ const INITIAL_LOGIN_STATE = {
   password: '',
 }
 
+const { Text, Link, Title } = Typography
+
 export function AuthShell() {
   const { login } = useAuth()
   const [mode, setMode] = useState('login')
@@ -43,7 +32,6 @@ export function AuthShell() {
   const [isRequestingCode, setIsRequestingCode] = useState(false)
   const [codeInfo, setCodeInfo] = useState(null)
 
-  // ---- Google Sign-In ----
   const gsiButtonRef = useRef(null)
   const [gsiReady, setGsiReady] = useState(false)
 
@@ -94,7 +82,6 @@ export function AuthShell() {
       auto_select: false,
     })
 
-    // 避免重複渲染按鈕
     gsiButtonRef.current.innerHTML = ''
 
     window.google.accounts.id.renderButton(gsiButtonRef.current, {
@@ -105,7 +92,7 @@ export function AuthShell() {
       text: 'signin_with',
       logo_alignment: 'left',
     })
-  }, [gsiReady])
+  }, [gsiReady, login])
 
   const handleSwitchMode = (nextMode) => {
     setMode(nextMode)
@@ -195,150 +182,119 @@ export function AuthShell() {
     }
   }
 
+  const loginForm = (
+    <Form layout='vertical' onSubmitCapture={handleLoginSubmit} requiredMark={false}>
+      <Form.Item label='Email' required>
+        <Input
+          type='email'
+          value={loginState.email}
+          onChange={handleLoginChange('email')}
+          autoComplete='email'
+          placeholder='you@example.com'
+        />
+      </Form.Item>
+      <Form.Item label='密碼' required>
+        <Input.Password
+          value={loginState.password}
+          onChange={handleLoginChange('password')}
+          autoComplete='current-password'
+          placeholder='請輸入密碼'
+        />
+      </Form.Item>
+      <Button type='primary' htmlType='submit' block loading={isSubmitting}>
+        登入
+      </Button>
+    </Form>
+  )
+
+  const registerForm = (
+    <Form layout='vertical' onSubmitCapture={handleRegisterSubmit} requiredMark={false}>
+      <Form.Item label='Email' required>
+        <Space.Compact block>
+          <Input
+            type='email'
+            value={registerState.email}
+            onChange={handleRegisterChange('email')}
+            autoComplete='email'
+            placeholder='you@example.com'
+          />
+          <Button onClick={handleRequestCode} loading={isRequestingCode}>
+            取得驗證碼
+          </Button>
+        </Space.Compact>
+        <Text type='secondary'>按下按鈕後會寄送 6 位數驗證碼到填寫的 Email。</Text>
+      </Form.Item>
+      <Form.Item label='驗證碼' required>
+        <Input
+          value={registerState.verificationCode}
+          onChange={handleRegisterChange('verificationCode')}
+          inputMode='numeric'
+          pattern='[0-9]*'
+          placeholder='請輸入 6 位數驗證碼'
+        />
+        {codeInfo?.expiresAt ? (
+          <Text type='secondary'>驗證碼將於 {new Date(codeInfo.expiresAt).toLocaleString()} 到期</Text>
+        ) : null}
+      </Form.Item>
+      <Form.Item label='暱稱' required>
+        <Input
+          value={registerState.name}
+          onChange={handleRegisterChange('name')}
+          placeholder='你的名字或暱稱'
+        />
+      </Form.Item>
+      <Form.Item label='密碼' required>
+        <Input.Password
+          value={registerState.password}
+          onChange={handleRegisterChange('password')}
+          autoComplete='new-password'
+          placeholder='至少 8 個字元'
+          minLength={8}
+        />
+      </Form.Item>
+      <Button type='primary' htmlType='submit' block loading={isSubmitting}>
+        建立帳號
+      </Button>
+    </Form>
+  )
+
   return (
-    <Flex height='100%' align='center' justify='center'>
-      <Box
-        borderWidth='1px'
-        borderRadius='lg'
-        padding='8'
-        maxW='480px'
-        width='100%'
-        bg='bg.surface'
-        boxShadow='md'
-      >
-        <VStack gap='4' align='stretch'>
-          <Stack gap='1'>
-            <Heading size='lg'>
-              {mode === 'login' ? '登入您的帳號' : '建立新帳號'}
-            </Heading>
-            <Text color='fg.muted'>
-              {mode === 'login'
-                ? '登入後即可管理你的番茄鐘紀錄。'
-                : '輸入 Email 取得驗證碼，再完成註冊流程。'}
-            </Text>
-          </Stack>
+    <Space direction='vertical' size='large' style={{ width: '100%' }}>
+      <Space direction='vertical' size={4}>
+        <Title level={4} style={{ margin: 0 }}>
+          {mode === 'login' ? '登入您的帳號' : '建立新帳號'}
+        </Title>
+        <Text type='secondary'>
+          {mode === 'login'
+            ? '登入後即可管理你的番茄鐘紀錄。'
+            : '輸入 Email 取得驗證碼，再完成註冊流程。'}
+        </Text>
+      </Space>
 
-          {/* Google 登入按鈕 */}
-          <Stack gap='3'>
-            <Box ref={gsiButtonRef} display='flex' justifyContent='center' />
-            <Box as='hr' borderTopWidth='1px' borderColor='border' mt='2' />
-          </Stack>
+      <div ref={gsiButtonRef} style={{ display: 'flex', justifyContent: 'center' }} />
+      <Divider plain>或</Divider>
 
-          {mode === 'login' ? (
-            <Stack as='form' gap='4' onSubmit={handleLoginSubmit}>
-              <Field.Root required>
-                <Field.Label>Email</Field.Label>
-                <Input
-                  type='email'
-                  value={loginState.email}
-                  onChange={handleLoginChange('email')}
-                  autoComplete='email'
-                  placeholder='you@example.com'
-                />
-              </Field.Root>
-              <Field.Root required>
-                <Field.Label>密碼</Field.Label>
-                <Input
-                  type='password'
-                  value={loginState.password}
-                  onChange={handleLoginChange('password')}
-                  autoComplete='current-password'
-                  placeholder='請輸入密碼'
-                />
-              </Field.Root>
-              <Button type='submit' colorScheme='primary' isLoading={isSubmitting}>
-                登入
-              </Button>
-            </Stack>
-          ) : (
-            <Stack as='form' gap='4' onSubmit={handleRegisterSubmit}>
-              <Field.Root required>
-                <Field.Label>Email</Field.Label>
-                <HStack align='start'>
-                  <Input
-                    type='email'
-                    value={registerState.email}
-                    onChange={handleRegisterChange('email')}
-                    autoComplete='email'
-                    placeholder='you@example.com'
-                  />
-                  <Button
-                    onClick={handleRequestCode}
-                    isLoading={isRequestingCode}
-                    variant='outline'
-                    flexShrink={0}
-                  >
-                    取得驗證碼
-                  </Button>
-                </HStack>
-                <Field.HelperText>
-                  按下按鈕後會寄送 6 位數驗證碼到填寫的 Email。
-                </Field.HelperText>
-              </Field.Root>
+      <Tabs
+        activeKey={mode}
+        onChange={handleSwitchMode}
+        items={[
+          { key: 'login', label: '登入', children: loginForm },
+          { key: 'register', label: '註冊', children: registerForm },
+        ]}
+      />
 
-              <Field.Root required>
-                <Field.Label>驗證碼</Field.Label>
-                <Input
-                  value={registerState.verificationCode}
-                  onChange={handleRegisterChange('verificationCode')}
-                  inputMode='numeric'
-                  pattern='[0-9]*'
-                  placeholder='請輸入 6 位數驗證碼'
-                />
-                {codeInfo?.expiresAt && (
-                  <Field.HelperText>
-                    驗證碼將於 {new Date(codeInfo.expiresAt).toLocaleString()} 到期
-                  </Field.HelperText>
-                )}
-              </Field.Root>
+      <Alert
+        type='info'
+        showIcon
+        message='目前開放 Email 與 Google 登入。完成註冊後即可使用番茄鐘。'
+      />
 
-              <Field.Root required>
-                <Field.Label>暱稱</Field.Label>
-                <Input
-                  value={registerState.name}
-                  onChange={handleRegisterChange('name')}
-                  placeholder='你的名字或暱稱'
-                />
-              </Field.Root>
-
-              <Field.Root required>
-                <Field.Label>密碼</Field.Label>
-                <Input
-                  type='password'
-                  value={registerState.password}
-                  onChange={handleRegisterChange('password')}
-                  autoComplete='new-password'
-                  placeholder='至少 8 個字元'
-                  minLength={8}
-                />
-              </Field.Root>
-
-              <Button type='submit' colorScheme='primary' isLoading={isSubmitting}>
-                建立帳號
-              </Button>
-            </Stack>
-          )}
-
-          <Alert.Root status='info' variant='subtle'>
-            <Alert.Indicator />
-            <Alert.Content>
-              <Alert.Description>
-                目前開放 Email 與 Google 登入。完成註冊後即可使用番茄鐘。
-              </Alert.Description>
-            </Alert.Content>
-          </Alert.Root>
-
-          <HStack justify='center'>
-            <Text>{mode === 'login' ? '還沒有帳號？' : '已經有帳號了？'}</Text>
-            <Link
-              onClick={() => handleSwitchMode(mode === 'login' ? 'register' : 'login')}
-              fontWeight='semibold'
-            >
-              {mode === 'login' ? '建立帳號' : '立即登入'}
-            </Link>
-          </HStack>
-        </VStack>
-      </Box>
-    </Flex>
+      <Space align='baseline'>
+        <Text>{mode === 'login' ? '還沒有帳號？' : '已經有帳號了？'}</Text>
+        <Link onClick={() => handleSwitchMode(mode === 'login' ? 'register' : 'login')}>
+          {mode === 'login' ? '建立帳號' : '立即登入'}
+        </Link>
+      </Space>
+    </Space>
   )
 }

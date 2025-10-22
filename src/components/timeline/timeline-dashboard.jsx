@@ -20,207 +20,48 @@ import {
 import { useAuth } from '../../lib/auth-context.jsx'
 import { fetchEvents, fetchSessions } from '../../lib/api.js'
 import { toaster } from '../ui/toaster.jsx'
+import {
+  endOfDay,
+  formatDurationLabel,
+  getEventColor,
+  getEventLabel,
+  getEventTags,
+  startOfDay,
+} from './utils.js'
+import { useTimelineFilters } from './use-timeline-filters.js'
 
-const DEFAULT_RANGE_DAYS = 7
 const ONE_HOUR = 60 * 60
-
-function formatDateInput(date) {
-  return date.toISOString().slice(0, 10)
-}
-
-function startOfDay(value) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return null
-  date.setHours(0, 0, 0, 0)
-  return date
-}
-
-function endOfDay(value) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return null
-  date.setHours(23, 59, 59, 999)
-  return date
-}
-
-function formatDurationLabel(durationSeconds) {
-  if (!durationSeconds || Number.isNaN(durationSeconds) || durationSeconds <= 0) {
-    return '約 25 分'
-  }
-  const minutes = Math.round(durationSeconds / 60)
-  if (minutes >= 60) {
-    const hours = Math.round((minutes / 60) * 10) / 10
-    return `約 ${hours} 小時`
-  }
-  return `約 ${minutes} 分`
-}
-
-function getEventColor(eventType) {
-  if (!eventType) return 'gray'
-  if (eventType.includes('complete')) return 'green'
-  if (eventType.includes('reset') || eventType.includes('reopen')) return 'orange'
-  if (eventType.includes('delete')) return 'red'
-  if (eventType.includes('add')) return 'blue'
-  return 'purple'
-}
-
-function getEventLabel(eventType) {
-  if (!eventType) return '事件'
-  const map = {
-    'todo-add': '新增待辦',
-    'todo-complete': '完成待辦',
-    'todo-reopen': '還原待辦',
-    'todo-delete': '刪除待辦',
-    'daily-todo-add': '新增每日任務',
-    'daily-todo-complete': '完成每日任務',
-    'daily-todo-reset': '重新開始每日任務',
-    'daily-todo-delete': '刪除每日任務',
-    start: '開始番茄鐘',
-    resume: '繼續番茄鐘',
-    pause: '暫停番茄鐘',
-    reset: '重置番茄鐘',
-    complete: '番茄鐘完成',
-  }
-  if (map[eventType]) return map[eventType]
-  const normalized = eventType.replace(/[-_]/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
-  return normalized
-}
-
-function getEventTags(event) {
-  const tags = []
-  const payload = event?.payload ?? {}
-  const eventType = event?.eventType ?? ''
-  const categoryLabel = payload.categoryLabel ?? event?.categoryLabel ?? null
-  const todoTitle =
-    payload.todoTitle ??
-    payload.title ??
-    payload.todo?.title ??
-    (typeof event?.title === 'string' && eventType.includes('todo') ? event.title : null)
-  const isTodoEvent = /todo/i.test(eventType)
-  const isPomodoroEvent = ['start', 'resume', 'pause', 'reset', 'complete'].includes(eventType)
-
-  if (todoTitle) {
-    tags.push({
-      key: `todo-${todoTitle}`,
-      label: todoTitle,
-      color: 'blue',
-    })
-  }
-
-  if (categoryLabel && (isPomodoroEvent || !isTodoEvent)) {
-    tags.push({
-      key: `category-${categoryLabel}`,
-      label: categoryLabel,
-      color: 'geekblue',
-    })
-  } else if (categoryLabel && isTodoEvent) {
-    tags.push({
-      key: `category-${categoryLabel}`,
-      label: categoryLabel,
-      color: 'purple',
-    })
-  }
-
-  if (event?.sessionKey) {
-    tags.push({
-      key: `session-${event.sessionKey}`,
-      label: `Session ${event.sessionKey.slice(-6)}`,
-      color: 'default',
-    })
-  }
-
-  return tags
-}
 
 export function TimelineDashboard() {
   const { token, isAuthenticated } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   const [sessions, setSessions] = useState([])
   const [events, setEvents] = useState([])
-  const [filters, setFilters] = useState(() => {
-    const end = new Date()
-    const start = new Date()
-    start.setDate(end.getDate() - (DEFAULT_RANGE_DAYS - 1))
-    start.setHours(0, 0, 0, 0)
-    end.setHours(23, 59, 59, 999)
-    return {
-      from: formatDateInput(start),
-      to: formatDateInput(end),
-      minHours: '0',
-    }
-  })
+  const {
+    filters,
+    activeRangeKey,
+    calendarValue,
+    selectedDate,
+    applyQuickRange,
+    selectDate,
+    handleMinHoursChange,
+    setCalendarValue,
+    setSelectedDate,
+  } = useTimelineFilters()
 
   const { Title, Paragraph, Text } = Typography
-  const [activeRangeKey, setActiveRangeKey] = useState('7d')
-
-  const [calendarValue, setCalendarValue] = useState(() =>
-    dayjs(filters.to || formatDateInput(new Date())),
-  )
-  const [selectedDate, setSelectedDate] = useState(() =>
-    dayjs(filters.to || formatDateInput(new Date())),
-  )
-
-  const handleMinHoursChange = (value) => {
-    setFilters((prev) => ({
-      ...prev,
-      minHours: value != null && !Number.isNaN(value) ? String(value) : '',
-    }))
-  }
-
-  const setDateRange = useCallback((from, to) => {
-    setFilters((prev) => ({
-      ...prev,
-      from: from ? from.format('YYYY-MM-DD') : '',
-      to: to ? to.format('YYYY-MM-DD') : '',
-    }))
-  }, [])
-
-  const applyQuickRange = useCallback(
-    (key) => {
-      const today = dayjs()
-      if (key === 'today') {
-        setDateRange(today, today)
-        setSelectedDate(today)
-        setCalendarValue(today)
-        return
-      }
-      if (key === '7d') {
-        const start = today.subtract(6, 'day')
-        setDateRange(start, today)
-        setSelectedDate(today)
-        setCalendarValue(today)
-        return
-      }
-      if (key === '14d') {
-        const start = today.subtract(13, 'day')
-        setDateRange(start, today)
-        setSelectedDate(today)
-        setCalendarValue(today)
-        return
-      }
-      if (key === 'month') {
-        const start = today.startOf('month')
-        const end = today.endOf('month')
-        setDateRange(start, end)
-        setSelectedDate(today)
-        setCalendarValue(today)
-      }
-    },
-    [setDateRange],
-  )
-
-  useEffect(() => {
-    applyQuickRange('7d')
-  }, [applyQuickRange])
-
   const quickRangeOptions = useMemo(
     () => [
       { label: '今日', value: 'today' },
       { label: '最近 7 天', value: '7d' },
       { label: '最近 14 天', value: '14d' },
       { label: '本月', value: 'month' },
+      { label: '自訂', value: 'custom', disabled: true },
     ],
     [],
   )
+  const isCustomRange = !['today', '7d', '14d', 'month'].includes(activeRangeKey)
+  const segmentedValue = isCustomRange ? 'custom' : activeRangeKey
 
   useEffect(() => {
     const rangeStart = filters.from ? dayjs(filters.from) : null
@@ -234,7 +75,7 @@ export function TimelineDashboard() {
       setSelectedDate(rangeEnd)
       setCalendarValue(rangeEnd)
     }
-  }, [filters.from, filters.to, selectedDate])
+  }, [filters.from, filters.to, selectedDate, setCalendarValue, setSelectedDate])
 
   useEffect(() => {
     if (!isAuthenticated || !token) {
@@ -446,10 +287,9 @@ export function TimelineDashboard() {
               </Text>
               <Segmented
                 block
-                value={quickRangeOptions.some((item) => item.value === activeRangeKey) ? activeRangeKey : undefined}
+                value={segmentedValue}
                 options={quickRangeOptions}
                 onChange={(value) => {
-                  setActiveRangeKey(value)
                   applyQuickRange(value)
                 }}
               />
@@ -469,7 +309,11 @@ export function TimelineDashboard() {
                 value={filters.minHours !== '' ? Number(filters.minHours) : null}
                 onChange={handleMinHoursChange}
               />
-              <Button onClick={() => setFilters((prev) => ({ ...prev }))} loading={isLoading}>
+              <Button
+                onClick={() => applyQuickRange(activeRangeKey)}
+                loading={isLoading}
+                disabled={isCustomRange}
+              >
                 重新整理
               </Button>
             </Space>
@@ -517,10 +361,7 @@ export function TimelineDashboard() {
                 fullscreen={false}
                 value={calendarValue}
                 onSelect={(value) => {
-                  setActiveRangeKey('custom')
-                  setSelectedDate(value)
-                  setCalendarValue(value)
-                  setDateRange(value, value)
+                  selectDate(value)
                 }}
                 onPanelChange={(value) => setCalendarValue(value)}
                 fullCellRender={renderDateCell}

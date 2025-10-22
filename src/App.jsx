@@ -1,27 +1,20 @@
 import { useCallback, useMemo } from 'react'
-import { Link as RouterLink, Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import {
-  Box,
-  Button,
-  ButtonGroup,
-  Container,
-  Heading,
-  HStack,
-  Stack,
-  Text,
-  VStack,
-} from '@chakra-ui/react'
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Layout, Typography, Space, Button, Card } from 'antd'
 import { ColorModeButton } from './components/ui/color-mode.jsx'
 import { Toaster } from './components/ui/toaster.jsx'
 import { AuthShell } from './components/auth/auth-shell.jsx'
 import { useAuth } from './lib/auth-context.jsx'
 import TimerPage from './pages/TimerPage.jsx'
 import TimelinePage from './pages/TimelinePage.jsx'
-import { LuClock3, LuListTree } from 'react-icons/lu'
+import { LuClock3, LuListTree, LuLogOut } from 'react-icons/lu'
+
+const { Header, Content } = Layout
 
 export default function App() {
   const { isAuthenticated, user, logout } = useAuth()
   const location = useLocation()
+  const navigate = useNavigate()
 
   const handleLogout = useCallback(() => {
     logout()
@@ -29,8 +22,8 @@ export default function App() {
 
   const navLinks = useMemo(
     () => [
-      { to: '/', label: '番茄鐘', icon: LuClock3 },
-      { to: '/timeline', label: '時間軸', icon: LuListTree },
+      { to: '/', label: '番茄鐘', icon: <LuClock3 size={16} /> },
+      { to: '/timeline', label: '時間軸', icon: <LuListTree size={16} /> },
     ],
     [],
   )
@@ -38,15 +31,23 @@ export default function App() {
   if (!isAuthenticated) {
     return (
       <>
-        <Container height='100vh' py='6'>
-          <VStack gap='6' height='100%' align='stretch' maxW='lg' mx='auto'>
-            <Stack gap='3' textAlign='center'>
-              <Heading size='lg'>Tomato Website</Heading>
-              <Text color='fg.muted'>登入後即可使用番茄鐘並追蹤操作時間軸。</Text>
-            </Stack>
-            <AuthShell />
-          </VStack>
-        </Container>
+        <Layout style={{ minHeight: '100vh', padding: 24 }}>
+          <Content style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Card style={{ width: '100%', maxWidth: 480 }}>
+              <Space direction='vertical' size='large' style={{ width: '100%' }}>
+                <Space direction='vertical' size={4}>
+                  <Typography.Title level={3} style={{ margin: 0 }}>
+                    Tomato Website
+                  </Typography.Title>
+                  <Typography.Text type='secondary'>
+                    登入後即可使用番茄鐘並追蹤操作時間軸。
+                  </Typography.Text>
+                </Space>
+                <AuthShell />
+              </Space>
+            </Card>
+          </Content>
+        </Layout>
         <Toaster />
       </>
     )
@@ -54,52 +55,92 @@ export default function App() {
 
   return (
     <>
-      <Container  py='6' overflow='hidden'>
-        <VStack gap='6' height='100%' maxH='100%' align='stretch'>
-          <Stack
-            direction={{ base: 'column', md: 'row' }}
-            justify='space-between'
-            align={{ base: 'flex-start', md: 'center' }}
-            spacing={{ base: 4, md: 6 }}
+      <Layout style={{ minHeight: '100vh' }}>
+        <Header
+          style={{
+            background: 'var(--ant-color-bg-elevated)',
+            padding: '16px 32px',
+            position: 'sticky',
+            top: 0,
+            zIndex: 20,
+            boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              gap: 16,
+            }}
           >
-            <Stack spacing={0}>
-              <Heading size='lg'>Tomato Website</Heading>
-            </Stack>
-            <HStack spacing={{ base: 2, md: 3 }} wrap='wrap'>
-              <ButtonGroup size='sm' variant='ghost'>
-                {navLinks.map((link) => {
-                  const isActive = location.pathname === link.to
-                  const Icon = link.icon
-                  return (
-                    <Button
-                      key={link.to}
-                      as={RouterLink}
-                      to={link.to}
-                      variant={isActive ? 'solid' : 'ghost'}
-                      colorScheme='blue'
-                      borderRadius='full'
-                      leftIcon={<Icon size={16} />}
-                    >
-                      {link.label}
-                    </Button>
-                  )
-                })}
-              </ButtonGroup>
-              <Button size='sm' variant='outline' onClick={handleLogout}>
+            <div style={{ flex: '1 1 240px', minWidth: 200 }}>
+              <Space direction='vertical' size={2}>
+                <Typography.Title level={3} style={{ margin: 0 }}>
+                  Tomato Website
+                </Typography.Title>
+                {user?.name ? (
+                  <Typography.Text type='secondary'>歡迎回來，{user.name}</Typography.Text>
+                ) : null}
+              </Space>
+            </div>
+            <div
+              style={{
+                flex: '1 1 320px',
+                minWidth: 240,
+                display: 'flex',
+                justifyContent: 'flex-end',
+                alignItems: 'center',
+                gap: 12,
+                flexWrap: 'wrap',
+              }}
+            >
+              {navLinks.map((link) => {
+                const isActive = location.pathname === link.to
+                return (
+                  <Button
+                    key={link.to}
+                    type={isActive ? 'primary' : 'default'}
+                    icon={link.icon}
+                    onClick={() => navigate(link.to)}
+                    shape='round'
+                  >
+                    {link.label}
+                  </Button>
+                )
+              })}
+              <Button
+                size='middle'
+                type='default'
+                icon={<LuLogOut size={16} />}
+                onClick={handleLogout}
+              >
                 登出
               </Button>
               <ColorModeButton />
-            </HStack>
-          </Stack>
-          <Box flex='1' minH='0' overflow='hidden'>
+            </div>
+          </div>
+        </Header>
+        <Content style={{ padding: '25px 24px 24px' }}>
+          <div
+            style={{
+              minHeight: '100%',
+              maxWidth: 1280,
+              margin: '0 auto',
+              paddingTop: 24,
+              paddingBottom: 24,
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
             <Routes>
               <Route path='/' element={<TimerPage />} />
               <Route path='/timeline' element={<TimelinePage />} />
               <Route path='*' element={<Navigate to='/' replace />} />
             </Routes>
-          </Box>
-        </VStack>
-      </Container>
+          </div>
+        </Content>
+      </Layout>
       <Toaster />
     </>
   )

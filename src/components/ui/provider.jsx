@@ -1,12 +1,17 @@
 'use client'
 
-import { ChakraProvider, defaultSystem } from '@chakra-ui/react'
-import { ColorModeProvider } from './color-mode'
+import { ConfigProvider, theme as antdTheme } from 'antd'
+import { ColorModeProvider, useColorModeValue } from './color-mode'
 
-export function Provider(props) {
+function AntdThemeBridge({ children }) {
+  const algorithm = useColorModeValue(antdTheme.defaultAlgorithm, antdTheme.darkAlgorithm)
+  return <ConfigProvider theme={{ algorithm }}>{children}</ConfigProvider>
+}
+
+export function Provider({ children }) {
   return (
-    <ChakraProvider value={defaultSystem}>
-      <ColorModeProvider {...props} />
-    </ChakraProvider>
+    <ColorModeProvider>
+      <AntdThemeBridge>{children}</AntdThemeBridge>
+    </ColorModeProvider>
   )
 }

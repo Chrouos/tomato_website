@@ -1,16 +1,12 @@
-import { Box, Heading, HStack, Stack, Text } from '@chakra-ui/react'
 import { TomatoTimer } from '../components/tomato-timer.jsx'
-import { useAuth } from '../lib/auth-context.jsx'
 
 export function TimerPage() {
-  const { user } = useAuth()
-
   return (
-    <Stack gap='6' height='100%'>
-      <Box flex='1' minH='0'>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, height: '100%' }}>
+      <div style={{ flex: 1, minHeight: 0 }}>
         <TomatoTimer />
-      </Box>
-    </Stack>
+      </div>
+    </div>
   )
 }
 

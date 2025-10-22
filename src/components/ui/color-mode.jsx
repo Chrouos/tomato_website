@@ -1,25 +1,29 @@
 'use client'
 
-import { ClientOnly, IconButton, Skeleton, Span } from '@chakra-ui/react'
+import { Button, Skeleton } from 'antd'
 import { ThemeProvider, useTheme } from 'next-themes'
-
 import * as React from 'react'
 import { LuMoon, LuSun } from 'react-icons/lu'
 
+function ClientOnly({ children, fallback = null }) {
+  const [mounted, setMounted] = React.useState(false)
+  React.useEffect(() => setMounted(true), [])
+  if (!mounted) return fallback
+  return <>{children}</>
+}
+
 export function ColorModeProvider(props) {
-  return (
-    <ThemeProvider attribute='class' disableTransitionOnChange {...props} />
-  )
+  return <ThemeProvider attribute='class' disableTransitionOnChange {...props} />
 }
 
 export function useColorMode() {
   const { resolvedTheme, setTheme, forcedTheme } = useTheme()
-  const colorMode = forcedTheme || resolvedTheme
+  const colorMode = forcedTheme || resolvedTheme || 'light'
   const toggleColorMode = () => {
-    setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')
+    setTheme(colorMode === 'dark' ? 'light' : 'dark')
   }
   return {
-    colorMode: colorMode,
+    colorMode,
     setColorMode: setTheme,
     toggleColorMode,
   }
@@ -35,56 +39,27 @@ export function ColorModeIcon() {
   return colorMode === 'dark' ? <LuMoon /> : <LuSun />
 }
 
-export const ColorModeButton = React.forwardRef(
-  function ColorModeButton(props, ref) {
-    const { toggleColorMode } = useColorMode()
-    return (
-      <ClientOnly fallback={<Skeleton boxSize='9' />}>
-        <IconButton
-          onClick={toggleColorMode}
-          variant='ghost'
-          aria-label='Toggle color mode'
-          size='sm'
-          ref={ref}
-          {...props}
-          css={{
-            _icon: {
-              width: '5',
-              height: '5',
-            },
-          }}
-        >
-          <ColorModeIcon />
-        </IconButton>
-      </ClientOnly>
-    )
-  },
-)
-
-export const LightMode = React.forwardRef(function LightMode(props, ref) {
+export const ColorModeButton = React.forwardRef(function ColorModeButton(props, ref) {
+  const { toggleColorMode } = useColorMode()
   return (
-    <Span
-      color='fg'
-      display='contents'
-      className='chakra-theme light'
-      colorPalette='gray'
-      colorScheme='light'
-      ref={ref}
-      {...props}
-    />
+    <ClientOnly fallback={<Skeleton.Button size='small' shape='circle' active />}>
+      <Button
+        {...props}
+        ref={ref}
+        type='text'
+        shape='circle'
+        size='small'
+        onClick={toggleColorMode}
+        icon={<ColorModeIcon />}
+      />
+    </ClientOnly>
   )
 })
 
+export const LightMode = React.forwardRef(function LightMode(props, ref) {
+  return <span data-theme='light' ref={ref} {...props} />
+})
+
 export const DarkMode = React.forwardRef(function DarkMode(props, ref) {
-  return (
-    <Span
-      color='fg'
-      display='contents'
-      className='chakra-theme dark'
-      colorPalette='gray'
-      colorScheme='dark'
-      ref={ref}
-      {...props}
-    />
-  )
+  return <span data-theme='dark' ref={ref} {...props} />
 })
