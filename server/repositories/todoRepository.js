@@ -1,5 +1,12 @@
 import { query } from '../db.js';
 
+export const ensureTodoSchema = async () => {
+  await query(`
+    ALTER TABLE IF EXISTS todos
+    ADD COLUMN IF NOT EXISTS due_at TIMESTAMPTZ;
+  `);
+};
+
 const mapTodo = (row) => {
   if (!row) return null;
   return {
@@ -9,6 +16,7 @@ const mapTodo = (row) => {
     categoryId: row.category_id,
     completed: row.completed,
     completedAt: row.completed_at,
+    dueAt: row.due_at,
     archived: row.archived,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -25,12 +33,13 @@ export const listTodos = async ({ userId }) => {
         category_id,
         completed,
         completed_at,
+        due_at,
         archived,
         created_at,
         updated_at
       FROM todos
       WHERE user_id = $1 AND archived = FALSE
-      ORDER BY completed ASC, updated_at DESC, created_at DESC
+      ORDER BY completed ASC, due_at IS NULL, due_at ASC, updated_at DESC
     `,
     [userId],
   );
@@ -38,15 +47,16 @@ export const listTodos = async ({ userId }) => {
   return result.rows.map(mapTodo);
 };
 
-export const createTodo = async ({ userId, title, categoryId }) => {
+export const createTodo = async ({ userId, title, categoryId, dueAt }) => {
   const result = await query(
     `
       INSERT INTO todos (
         user_id,
         title,
-        category_id
+        category_id,
+        due_at
       )
-      VALUES ($1, $2, $3)
+      VALUES ($1, $2, $3, $4)
       RETURNING
         id,
         user_id,
@@ -54,17 +64,18 @@ export const createTodo = async ({ userId, title, categoryId }) => {
         category_id,
         completed,
         completed_at,
+        due_at,
         archived,
         created_at,
         updated_at
     `,
-    [userId, title.trim(), categoryId || null],
+    [userId, title.trim(), categoryId || null, dueAt ?? null],
   );
 
   return mapTodo(result.rows[0]);
 };
 
-export const updateTodo = async ({ userId, todoId, title, categoryId }) => {
+export const updateTodo = async ({ userId, todoId, title, categoryId, dueAt }) => {
   const fields = [];
   const values = [userId, todoId];
   let index = values.length;
@@ -81,6 +92,12 @@ export const updateTodo = async ({ userId, todoId, title, categoryId }) => {
     values.push(categoryId || null);
   }
 
+  if (dueAt !== undefined) {
+    index += 1;
+    fields.push(`due_at = $${index}`);
+    values.push(dueAt ?? null);
+  }
+
   if (!fields.length) {
     const current = await query(
       `
@@ -91,6 +108,7 @@ export const updateTodo = async ({ userId, todoId, title, categoryId }) => {
           category_id,
           completed,
           completed_at,
+          due_at,
           archived,
           created_at,
           updated_at
@@ -115,6 +133,7 @@ export const updateTodo = async ({ userId, todoId, title, categoryId }) => {
       category_id,
       completed,
       completed_at,
+      due_at,
       archived,
       created_at,
       updated_at
@@ -140,6 +159,7 @@ export const setTodoCompletion = async ({ userId, todoId, completed }) => {
       category_id,
       completed,
       completed_at,
+      due_at,
       archived,
       created_at,
       updated_at
@@ -164,6 +184,7 @@ export const archiveTodo = async ({ userId, todoId }) => {
       category_id,
       completed,
       completed_at,
+      due_at,
       archived,
       created_at,
       updated_at
@@ -175,6 +196,7 @@ export const archiveTodo = async ({ userId, todoId }) => {
 };
 
 export default {
+  ensureTodoSchema,
   listTodos,
   createTodo,
   updateTodo,

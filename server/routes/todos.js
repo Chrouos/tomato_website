@@ -79,15 +79,24 @@ router.get('/', async (req, res) => {
  *         description: 未授權
  */
 router.post('/', async (req, res) => {
-  const { title, categoryId } = req.body ?? {};
+  const { title, categoryId, dueAt } = req.body ?? {};
   if (typeof title !== 'string' || title.trim() === '') {
     return res.status(400).json({ error: 'title 為必填欄位' });
+  }
+
+  let parsedDueAt = null;
+  if (dueAt) {
+    const temp = new Date(dueAt);
+    if (!Number.isNaN(temp.getTime())) {
+      parsedDueAt = temp;
+    }
   }
 
   const todo = await createTodo({
     userId: req.user.id,
     title,
     categoryId: categoryId || null,
+    dueAt: parsedDueAt,
   });
 
   res.status(201).json(todo);
@@ -123,13 +132,24 @@ router.post('/', async (req, res) => {
  *         description: 找不到待辦事項
  */
 router.patch('/:id', async (req, res) => {
-  const { title, categoryId } = req.body ?? {};
+  const { title, categoryId, dueAt } = req.body ?? {};
+
+  let parsedDueAt;
+  if (dueAt !== undefined) {
+    if (dueAt === null) {
+      parsedDueAt = null;
+    } else {
+      const temp = new Date(dueAt);
+      parsedDueAt = Number.isNaN(temp.getTime()) ? undefined : temp;
+    }
+  }
 
   const todo = await updateTodo({
     userId: req.user.id,
     todoId: req.params.id,
     title,
     categoryId,
+    dueAt: parsedDueAt,
   });
 
   if (!todo) {

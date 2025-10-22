@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Card, Collapse, Col, Input, InputNumber, Modal, Row, Space, Spin, Tag, Typography } from 'antd'
+import { Button, Card, Collapse, Col, DatePicker, Input, InputNumber, Modal, Row, Space, Spin, Tag, Typography } from 'antd'
+import dayjs from 'dayjs'
 import {
   LuCalendar,
   LuClipboardList,
@@ -87,6 +88,7 @@ export function TomatoTimer() {
   const [todos, setTodos] = useState([])
   const [newTodoTitle, setNewTodoTitle] = useState('')
   const [newTodoCategoryId, setNewTodoCategoryId] = useState(null)
+  const [newTodoDueAt, setNewTodoDueAt] = useState(null)
   const [dailyTodos, setDailyTodos] = useState([])
   const [newDailyTodoTitle, setNewDailyTodoTitle] = useState('')
   const [newDailyTodoCategoryId, setNewDailyTodoCategoryId] = useState(null)
@@ -131,6 +133,7 @@ export function TomatoTimer() {
     categoryId: item.categoryId ?? null,
     completed: Boolean(item.completed),
     completedAt: item.completedAt ? new Date(item.completedAt) : null,
+    dueAt: item.dueAt ? new Date(item.dueAt) : null,
     archived: Boolean(item.archived),
     createdAt: item.createdAt ? new Date(item.createdAt) : null,
     updatedAt: item.updatedAt ? new Date(item.updatedAt) : null,
@@ -1072,6 +1075,7 @@ export function TomatoTimer() {
     if (!trimmed || !newTodoCategoryId) return
 
     const categorySnapshot = getCategorySnapshot(newTodoCategoryId)
+    const dueAtIsoString = newTodoDueAt ? newTodoDueAt.toISOString() : null
 
     if (isAuthenticated && token) {
       try {
@@ -1079,10 +1083,12 @@ export function TomatoTimer() {
           token,
           title: trimmed,
           categoryId: newTodoCategoryId,
+          dueAt: dueAtIsoString,
         })
         const mapped = mapTodoFromApi(created)
         setTodos((prev) => [mapped, ...prev])
         setNewTodoTitle('')
+        setNewTodoDueAt(null)
         logEvent(
           'todo-add',
           {
@@ -1106,11 +1112,13 @@ export function TomatoTimer() {
       title: trimmed,
       categoryId: newTodoCategoryId,
       completed: false,
+      dueAt: newTodoDueAt ? newTodoDueAt.toDate() : null,
       createdAt: new Date(),
       completedAt: null,
     }
     setTodos((prev) => [todo, ...prev])
     setNewTodoTitle('')
+    setNewTodoDueAt(null)
     logEvent(
       'todo-add',
       {
@@ -1295,6 +1303,31 @@ export function TomatoTimer() {
     border: '1px solid #b7eb8f',
     background: '#f6ffed',
   }
+  const getDueInfo = useCallback((dueAt) => {
+    if (!dueAt) {
+      return {
+        dateLabel: '未設定',
+        hoursText: '—',
+        status: 'none',
+      }
+    }
+    const due = dayjs(dueAt)
+    if (!due.isValid()) {
+      return {
+        dateLabel: '格式錯誤',
+        hoursText: '—',
+        status: 'none',
+      }
+    }
+    const diffMinutes = due.diff(dayjs(), 'minute')
+    const diffHours = diffMinutes / 60
+    const hoursLabel = Math.abs(diffHours).toFixed(1)
+    return {
+      dateLabel: due.format('MM/DD HH:mm'),
+      hoursText: diffHours >= 0 ? `還有 ${hoursLabel} 小時` : `已逾期 ${hoursLabel} 小時`,
+      status: diffHours >= 0 ? 'upcoming' : 'overdue',
+    }
+  }, [])
   const renderCategorySelection = ({ selectedId, onSelect, emptyText }) => {
     if (categories.length === 0) {
       return (
@@ -1469,12 +1502,6 @@ export function TomatoTimer() {
           value={newCategoryLabel}
           disabled={isRunning}
           onChange={(event) => setNewCategoryLabel(event.target.value)}
-          onPressEnter={(event) => {
-            event.preventDefault()
-            if (!isSavingCategory && !isRunning) {
-              handleAddCategory()
-            }
-          }}
         />
         <Button
           size='small'
@@ -1496,10 +1523,6 @@ export function TomatoTimer() {
         placeholder='輸入每日任務內容'
         value={newDailyTodoTitle}
         onChange={(event) => setNewDailyTodoTitle(event.target.value)}
-        onPressEnter={(event) => {
-          event.preventDefault()
-          handleAddDailyTodo()
-        }}
       />
       {renderCategorySelection({
         selectedId: newDailyTodoCategoryId,
@@ -1522,10 +1545,15 @@ export function TomatoTimer() {
         placeholder='輸入待辦事項'
         value={newTodoTitle}
         onChange={(event) => setNewTodoTitle(event.target.value)}
-        onPressEnter={(event) => {
-          event.preventDefault()
-          handleAddTodo()
-        }}
+      />
+      <DatePicker
+        showTime
+        allowClear
+        value={newTodoDueAt}
+        onChange={(value) => setNewTodoDueAt(value)}
+        style={{ width: '100%' }}
+        placeholder='選擇截止時間（可留空）'
+        format='YYYY/MM/DD HH:mm'
       />
       {renderCategorySelection({
         selectedId: newTodoCategoryId,
@@ -1989,6 +2017,7 @@ export function TomatoTimer() {
                           {pendingTodos.map((todo) => {
                             const category = getCategorySnapshot(todo.categoryId)
                             const isDeleting = deletingTodoId === todo.id
+                            const dueInfo = getDueInfo(todo.dueAt)
                             return (
                               <div key={todo.id} style={taskCardBaseStyle}>
                                 <Space direction='vertical' size={6} style={{ width: '100%' }}>
@@ -2027,6 +2056,15 @@ export function TomatoTimer() {
                                   <AntText type='secondary' style={{ fontSize: 12 }}>
                                     類別：{category.categoryLabel}
                                   </AntText>
+                                  <AntText type='secondary' style={{ fontSize: 12 }}>
+                                    截止：{dueInfo.dateLabel}
+                                  </AntText>
+                                  <AntText
+                                    type={dueInfo.status === 'overdue' ? 'danger' : dueInfo.status === 'upcoming' ? 'success' : 'secondary'}
+                                    style={{ fontSize: 12 }}
+                                  >
+                                    {dueInfo.status === 'none' ? '未設定提醒' : dueInfo.hoursText}
+                                  </AntText>
                                 </Space>
                               </div>
                             )
@@ -2049,6 +2087,7 @@ export function TomatoTimer() {
                           {completedTodos.map((todo) => {
                             const category = getCategorySnapshot(todo.categoryId)
                             const isDeleting = deletingTodoId === todo.id
+                            const dueInfo = getDueInfo(todo.dueAt)
                             return (
                               <div key={todo.id} style={taskCardCompletedStyle}>
                                 <Space direction='vertical' size={6} style={{ width: '100%' }}>
@@ -2085,6 +2124,15 @@ export function TomatoTimer() {
                                   </div>
                                   <AntText type='secondary' style={{ fontSize: 12 }}>
                                     類別：{category.categoryLabel}
+                                  </AntText>
+                                  <AntText type='secondary' style={{ fontSize: 12 }}>
+                                    截止：{dueInfo.dateLabel}
+                                  </AntText>
+                                  <AntText
+                                    type={dueInfo.status === 'overdue' ? 'danger' : dueInfo.status === 'upcoming' ? 'success' : 'secondary'}
+                                    style={{ fontSize: 12 }}
+                                  >
+                                    {dueInfo.status === 'none' ? '未設定提醒' : dueInfo.hoursText}
                                   </AntText>
                                   <AntText type='secondary' style={{ fontSize: 12 }}>
                                     完成於：{todo.completedAt ? formatTimeOfDay(todo.completedAt) : '—'}

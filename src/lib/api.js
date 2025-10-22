@@ -168,18 +168,18 @@ export const fetchTodos = ({ token }) =>
     token,
   });
 
-export const createTodo = ({ token, title, categoryId }) =>
+export const createTodo = ({ token, title, categoryId, dueAt }) =>
   apiRequest('/todos', {
     method: 'POST',
     token,
-    body: { title, categoryId: categoryId ?? null },
+    body: { title, categoryId: categoryId ?? null, dueAt },
   });
 
-export const updateTodo = ({ token, todoId, title, categoryId }) =>
+export const updateTodo = ({ token, todoId, title, categoryId, dueAt }) =>
   apiRequest(`/todos/${encodeURIComponent(todoId)}`, {
     method: 'PATCH',
     token,
-    body: { title, categoryId: categoryId ?? null },
+    body: { title, categoryId: categoryId ?? null, dueAt },
   });
 
 export const completeTodo = ({ token, todoId }) =>

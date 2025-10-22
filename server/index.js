@@ -12,6 +12,7 @@ import dailyTasksRouter from './routes/dailyTasks.js';
 import todosRouter from './routes/todos.js';
 import { getEnv, getEnvNumber } from './config/env.js';
 import { ensureDefaultCategories } from './repositories/categoryRepository.js';
+import { ensureTodoSchema } from './repositories/todoRepository.js';
 
 const app = express();
 
@@ -38,9 +39,9 @@ app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true 
 
 const port = getEnvNumber('SERVER_PORT', 4000);
 
-ensureDefaultCategories()
+Promise.all([ensureTodoSchema(), ensureDefaultCategories()])
   .catch((error) => {
-    console.error('Failed to ensure default categories', error);
+    console.error('Failed to initialize application', error);
   })
   .finally(() => {
     app.listen(port, () => {
