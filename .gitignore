@@ -13,3 +13,5 @@ yarn.lock
 server/data/init/*.sql
 server/data/init/*.sql.*
 server/data/init/*.psql
+
+/src/generated/prisma

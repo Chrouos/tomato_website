@@ -1,8 +1,18 @@
-import { query } from '../db.js';
+// server/repositories/sessionEventRepository.js
+import { prisma } from '../db.js'
+
+const selectFields = {
+  id: true,
+  user_id: true,
+  session_key: true,
+  event_type: true,
+  payload: true,
+  occurred_at: true,
+  created_at: true,
+}
 
 const mapEvent = (row) => {
-  if (!row) return null;
-
+  if (!row) return null
   return {
     id: row.id,
     userId: row.user_id,
@@ -11,35 +21,27 @@ const mapEvent = (row) => {
     payload: row.payload,
     occurredAt: row.occurred_at,
     createdAt: row.created_at,
-  };
-};
+  }
+}
 
+const toDate = (v) => (v ? (v instanceof Date ? v : new Date(v)) : undefined)
+
+/** 建立事件 */
 export const createEvent = async ({ userId, sessionKey, eventType, payload, occurredAt }) => {
-  const result = await query(
-    `
-      INSERT INTO session_events (
-        user_id,
-        session_key,
-        event_type,
-        payload,
-        occurred_at
-      )
-      VALUES ($1, $2, $3, $4, $5)
-      RETURNING
-        id,
-        user_id,
-        session_key,
-        event_type,
-        payload,
-        occurred_at,
-        created_at
-    `,
-    [userId, sessionKey ?? null, eventType, payload ?? null, occurredAt ?? new Date()],
-  );
+  const row = await prisma.session_events.create({
+    data: {
+      user_id: userId,
+      session_key: sessionKey ?? null,
+      event_type: eventType,
+      payload: payload ?? null,
+      occurred_at: occurredAt ? toDate(occurredAt) : new Date(), // 與原本 NOW() 一致
+    },
+    select: selectFields,
+  })
+  return mapEvent(row)
+}
 
-  return mapEvent(result.rows[0]);
-};
-
+/** 依使用者查事件（可選 sessionKey、from/to 區間；含分頁） */
 export const listEventsByUser = async ({
   userId,
   from,
@@ -48,58 +50,26 @@ export const listEventsByUser = async ({
   limit = 200,
   offset = 0,
 }) => {
-  const conditions = ['user_id = $1'];
-  const values = [userId];
-  let index = values.length;
-
-  if (sessionKey) {
-    index += 1;
-    conditions.push(`session_key = $${index}`);
-    values.push(sessionKey);
+  const where = {
+    user_id: userId,
+    ...(sessionKey ? { session_key: sessionKey } : {}),
+    ...(from || to
+      ? { occurred_at: { ...(from ? { gte: toDate(from) } : {}), ...(to ? { lte: toDate(to) } : {}) } }
+      : {}),
   }
 
-  if (from) {
-    index += 1;
-    conditions.push(`occurred_at >= $${index}`);
-    values.push(from);
-  }
+  const rows = await prisma.session_events.findMany({
+    where,
+    select: selectFields,
+    orderBy: [{ occurred_at: 'desc' }, { created_at: 'desc' }],
+    take: limit,
+    skip: offset,
+  })
 
-  if (to) {
-    index += 1;
-    conditions.push(`occurred_at <= $${index}`);
-    values.push(to);
-  }
-
-  index += 1;
-  const limitParam = index;
-  values.push(limit);
-
-  index += 1;
-  const offsetParam = index;
-  values.push(offset);
-
-  const result = await query(
-    `
-      SELECT
-        id,
-        user_id,
-        session_key,
-        event_type,
-        payload,
-        occurred_at,
-        created_at
-      FROM session_events
-      WHERE ${conditions.join(' AND ')}
-      ORDER BY occurred_at DESC, created_at DESC
-      LIMIT $${limitParam} OFFSET $${offsetParam}
-    `,
-    values,
-  );
-
-  return result.rows.map(mapEvent);
-};
+  return rows.map(mapEvent)
+}
 
 export default {
   createEvent,
   listEventsByUser,
-};
+}

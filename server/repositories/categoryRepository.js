@@ -1,180 +1,122 @@
-import { randomUUID } from 'crypto';
-import { query } from '../db.js';
+// server/repositories/categoryRepository.js
+import { randomUUID } from 'crypto'
+import { prisma } from '../db.js'
 
 export const DEFAULT_CATEGORY_SEEDS = [
   // { id: 'deep-work', label: '深度工作' },
-  // { id: 'learning', label: '學習' },
-  // { id: 'meeting', label: '會議/討論' },
-  // { id: 'break', label: '安排休息' },
-];
+  // { id: 'learning',  label: '學習' },
+  // { id: 'meeting',   label: '會議/討論' },
+  // { id: 'break',     label: '安排休息' },
+]
 
+// 內部欄位 → 對外 camelCase
 const mapCategory = (row) => {
-  if (!row) return null;
+  if (!row) return null
   return {
     id: row.id,
-    userId: row.user_id,
+    userId: row.user_id ?? null,
     label: row.label,
     isDefault: row.is_default,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-  };
-};
+  }
+}
 
+const categorySelect = {
+  id: true,
+  user_id: true,
+  label: true,
+  is_default: true,
+  created_at: true,
+  updated_at: true,
+}
+
+// 1) 補種預設類別（只新增缺的；不覆寫 label）
 export const ensureDefaultCategories = async () => {
-  const existing = await query(
-    `
-      SELECT id
-      FROM categories
-      WHERE id = ANY($1::text[])
-    `,
-    [DEFAULT_CATEGORY_SEEDS.map((seed) => seed.id)],
-  );
+  if (!DEFAULT_CATEGORY_SEEDS.length) return
 
-  const existingIds = new Set(existing.rows.map((row) => row.id));
-  const missing = DEFAULT_CATEGORY_SEEDS.filter((seed) => !existingIds.has(seed.id));
+  const seedIds = DEFAULT_CATEGORY_SEEDS.map(s => s.id)
+  const existing = await prisma.categories.findMany({
+    where: { id: { in: seedIds } },
+    select: { id: true },
+  })
+  const existingIds = new Set(existing.map(r => r.id))
+  const missing = DEFAULT_CATEGORY_SEEDS.filter(s => !existingIds.has(s.id))
+  if (!missing.length) return
 
-  if (!missing.length) {
-    return;
-  }
+  await prisma.categories.createMany({
+    data: missing.map(s => ({ id: s.id, label: s.label, is_default: true })),
+    skipDuplicates: true,
+  })
+}
 
-  const values = [];
-  const placeholders = missing
-    .map((seed, index) => {
-      const i = index * 2;
-      values.push(seed.id, seed.label);
-      return `($${i + 1}, $${i + 2}, TRUE)`;
-    })
-    .join(', ');
-
-  await query(
-    `
-      INSERT INTO categories (id, label, is_default)
-      VALUES ${placeholders}
-      ON CONFLICT (id) DO NOTHING
-    `,
-    values,
-  );
-};
-
+// 2) 列表（userId 存在：預設 + 該用戶自訂；否則：只有預設）
 export const listCategories = async ({ userId } = {}) => {
-  if (userId) {
-    const result = await query(
-      `
-        SELECT
-          id,
-          user_id,
-          label,
-          is_default,
-          created_at,
-          updated_at
-        FROM categories
-        WHERE is_default = TRUE OR user_id = $1
-        ORDER BY
-          CASE WHEN is_default THEN 0 ELSE 1 END,
-          created_at ASC,
-          label ASC
-      `,
-      [userId],
-    );
+  const where = userId
+    ? { OR: [{ is_default: true }, { user_id: userId }] }
+    : { is_default: true }
 
-    return result.rows.map(mapCategory);
-  }
+  const rows = await prisma.categories.findMany({
+    where,
+    select: categorySelect,
+    orderBy: [
+      { is_default: 'desc' },    // 預設在前（true 排前）
+      { created_at: 'asc' },
+      { label: 'asc' },
+    ],
+  })
+  return rows.map(mapCategory)
+}
 
-  const result = await query(
-    `
-      SELECT
-        id,
-        user_id,
-        label,
-        is_default,
-        created_at,
-        updated_at
-      FROM categories
-      WHERE is_default = TRUE
-      ORDER BY created_at ASC, label ASC
-    `,
-    [],
-  );
-
-  return result.rows.map(mapCategory);
-};
-
+// 3) 建立（避免與預設或該用戶已有的 label 重複，大小寫不敏感）
 export const createCategory = async ({ userId, label }) => {
-  if (!userId) {
-    throw new Error('缺少 userId');
-  }
+  if (!userId) throw new Error('缺少 userId')
+  const trimmed = (label ?? '').trim()
+  if (!trimmed) throw new Error('label 是必填欄位')
 
-  const trimmed = (label ?? '').trim();
+  const dup = await prisma.categories.findFirst({
+    where: {
+      label: { equals: trimmed, mode: 'insensitive' },
+      OR: [{ is_default: true }, { user_id: userId }],
+    },
+    select: { id: true },
+  })
+  if (dup) throw new Error('類別名稱已存在')
 
-  if (!trimmed) {
-    throw new Error('label 是必填欄位');
-  }
+  const row = await prisma.categories.create({
+    data: {
+      id: randomUUID(),
+      user_id: userId,
+      label: trimmed,
+      is_default: false,
+    },
+    select: categorySelect,
+  })
+  return mapCategory(row)
+}
 
-  const duplicate = await query(
-    `
-      SELECT id
-      FROM categories
-      WHERE (user_id = $1 OR is_default = TRUE)
-        AND LOWER(label) = LOWER($2)
-      LIMIT 1
-    `,
-    [userId, trimmed],
-  );
-
-  if (duplicate.rowCount > 0) {
-    throw new Error('類別名稱已存在');
-  }
-
-  const id = randomUUID();
-  const result = await query(
-    `
-      INSERT INTO categories (
-        id,
-        user_id,
-        label,
-        is_default
-      )
-      VALUES ($1, $2, $3, FALSE)
-      RETURNING
-        id,
-        user_id,
-        label,
-        is_default,
-        created_at,
-        updated_at
-    `,
-    [id, userId, trimmed],
-  );
-
-  return mapCategory(result.rows[0]);
-};
-
+// 4) 刪除（僅限本人且非預設）
 export const deleteCategory = async ({ userId, categoryId }) => {
-  if (!userId) {
-    throw new Error('缺少 userId');
-  }
+  if (!userId) throw new Error('缺少 userId')
 
-  const result = await query(
-    `
-      DELETE FROM categories
-      WHERE id = $1 AND user_id = $2 AND is_default = FALSE
-      RETURNING
-        id,
-        user_id,
-        label,
-        is_default,
-        created_at,
-        updated_at
-    `,
-    [categoryId, userId],
-  );
+  // 先查到要刪的（帶條件），再刪；用交易確保一致性
+  const [found] = await prisma.$transaction([
+    prisma.categories.findFirst({
+      where: { id: categoryId, user_id: userId, is_default: false },
+      select: categorySelect,
+    }),
+  ])
+  if (!found) return null
 
-  return mapCategory(result.rows[0]);
-};
+  await prisma.categories.delete({
+    where: { id: categoryId }, // id 是主鍵；條件已在上一步過濾
+  })
+  return mapCategory(found)
+}
 
 export default {
   ensureDefaultCategories,
   listCategories,
   createCategory,
   deleteCategory,
-};
+}

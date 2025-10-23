@@ -1,7 +1,20 @@
-import { query } from '../db.js';
+// server/repositories/sessionRepository.js
+import { prisma } from '../db.js'
+
+const selectFields = {
+  id: true,
+  user_id: true,
+  duration_seconds: true,
+  category_id: true,
+  category_label: true,
+  started_at: true,
+  completed_at: true,
+  created_at: true,
+  updated_at: true,
+}
 
 const mapSession = (row) => {
-  if (!row) return null;
+  if (!row) return null
   return {
     id: row.id,
     userId: row.user_id,
@@ -12,9 +25,12 @@ const mapSession = (row) => {
     completedAt: row.completed_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-  };
-};
+  }
+}
 
+const toDate = (v) => (v ? (v instanceof Date ? v : new Date(v)) : null)
+
+// 建立 Session
 export const createSession = async ({
   userId,
   durationSeconds,
@@ -23,59 +39,38 @@ export const createSession = async ({
   startedAt,
   completedAt,
 }) => {
-  const result = await query(
-    `
-      INSERT INTO sessions (
-        user_id,
-        duration_seconds,
-        category_id,
-        category_label,
-        started_at,
-        completed_at
-      )
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING
-        id,
-        user_id,
-        duration_seconds,
-        category_id,
-        category_label,
-        started_at,
-        completed_at,
-        created_at,
-        updated_at
-    `,
-    [userId, durationSeconds, categoryId, categoryLabel, startedAt, completedAt],
-  );
+  const row = await prisma.sessions.create({
+    data: {
+      user_id: userId,
+      duration_seconds: durationSeconds,
+      category_id: categoryId ?? null,
+      category_label: categoryLabel ?? null,
+      started_at: toDate(startedAt),
+      completed_at: toDate(completedAt),
+      // created_at/updated_at 由 DB default(now()) 填
+    },
+    select: selectFields,
+  })
+  return mapSession(row)
+}
 
-  return mapSession(result.rows[0]);
-};
-
+// 依使用者列出 Sessions（completed_at DESC NULLS LAST, created_at DESC）
 export const listSessionsByUser = async ({ userId, limit = 50, offset = 0 }) => {
-  const result = await query(
-    `
-      SELECT
-        id,
-        user_id,
-        duration_seconds,
-        category_id,
-        category_label,
-        started_at,
-        completed_at,
-        created_at,
-        updated_at
-      FROM sessions
-      WHERE user_id = $1
-      ORDER BY completed_at DESC NULLS LAST, created_at DESC
-      LIMIT $2 OFFSET $3
-    `,
-    [userId, limit, offset],
-  );
-
-  return result.rows.map(mapSession);
-};
+  const rows = await prisma.sessions.findMany({
+    where: { user_id: userId },
+    select: selectFields,
+    orderBy: [
+      // Prisma 6 寫法：指定 nulls 排序
+      { completed_at: { sort: 'desc', nulls: 'last' } },
+      { created_at: 'desc' },
+    ],
+    take: limit,
+    skip: offset,
+  })
+  return rows.map(mapSession)
+}
 
 export default {
   createSession,
   listSessionsByUser,
-};
+}

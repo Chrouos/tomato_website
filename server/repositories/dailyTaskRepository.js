@@ -1,7 +1,9 @@
-import { query } from '../db.js';
+// server/repositories/dailyTaskRepository.js
+import { prisma } from '../db.js'
 
-const mapDailyTask = (row) => {
-  if (!row) return null;
+// ── 共用：DB→API 映射 ─────────────────────────────────────────
+const mapDailyTask = (row, completion = null) => {
+  if (!row) return null
   return {
     id: row.id,
     userId: row.user_id,
@@ -10,180 +12,173 @@ const mapDailyTask = (row) => {
     archived: row.archived,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    completedToday: row.completed_today,
-    completionId: row.completion_id,
-    completedOn: row.completed_on,
-  };
-};
+    completedToday: !!completion,
+    completionId: completion?.id ?? null,
+    completedOn: completion?.completed_on ?? null,
+  }
+}
 
+const dailyTaskSelect = {
+  id: true,
+  user_id: true,
+  title: true,
+  category_id: true,
+  archived: true,
+  created_at: true,
+  updated_at: true,
+}
+
+const completionSelect = {
+  id: true,
+  daily_task_id: true,
+  completed_on: true,
+  created_at: true,
+  updated_at: true,
+}
+
+// 小工具：把 'YYYY-MM-DD' 轉成 Date（UTC 00:00）
+const toDate = (d) => (d instanceof Date ? d : new Date(`${d}T00:00:00.000Z`))
+
+// ── 1) 列表（含當天是否完成） ─────────────────────────────────
 export const listDailyTasks = async ({ userId, date }) => {
-  const result = await query(
-    `
-      SELECT
-        dt.id,
-        dt.user_id,
-        dt.title,
-        dt.category_id,
-        dt.archived,
-        dt.created_at,
-        dt.updated_at,
-        (c.id IS NOT NULL) AS completed_today,
-        c.id AS completion_id,
-        c.completed_on
-      FROM daily_tasks dt
-      LEFT JOIN daily_task_completions c
-        ON c.daily_task_id = dt.id
-       AND c.completed_on = $2
-      WHERE dt.user_id = $1
-        AND dt.archived = FALSE
-      ORDER BY dt.created_at ASC, dt.id ASC
-    `,
-    [userId, date],
-  );
+  const completedOn = toDate(date)
 
-  return result.rows.map(mapDailyTask);
-};
+  const rows = await prisma.daily_tasks.findMany({
+    where: { user_id: userId, archived: false },
+    select: {
+      ...dailyTaskSelect,
+      daily_task_completions: {
+        where: { completed_on: completedOn },
+        select: completionSelect,
+        take: 1, // 每天最多一筆
+      },
+    },
+    orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
+  })
 
+  return rows.map((r) => mapDailyTask(r, r.daily_task_completions[0]))
+}
+
+// ── 2) 建立 ───────────────────────────────────────────────────
 export const createDailyTask = async ({ userId, title, categoryId }) => {
-  const result = await query(
-    `
-      INSERT INTO daily_tasks (
-        user_id,
-        title,
-        category_id
-      )
-      VALUES ($1, $2, $3)
-      RETURNING
-        id,
-        user_id,
-        title,
-        category_id,
-        archived,
-        created_at,
-        updated_at
-    `,
-    [userId, title.trim(), categoryId || null],
-  );
+  if (typeof title !== 'string' || !title.trim()) {
+    throw new Error('title 是必填欄位')
+  }
+  const row = await prisma.daily_tasks.create({
+    data: {
+      user_id: userId,
+      title: title.trim(),
+      category_id: categoryId ?? null,
+      // created_at/updated_at 由 DB default(now()) 填
+    },
+    select: dailyTaskSelect,
+  })
+  return mapDailyTask(row)
+}
 
-  return mapDailyTask(result.rows[0]);
-};
-
+// ── 3) 更新（僅允許 title / categoryId；需本人且未封存） ────────
 export const updateDailyTask = async ({ userId, taskId, title, categoryId }) => {
-  const fields = [];
-  const values = [userId, taskId];
-  let index = values.length;
+  const existing = await prisma.daily_tasks.findFirst({
+    where: { id: taskId, user_id: userId, archived: false },
+    select: dailyTaskSelect,
+  })
+  if (!existing) return null
 
-  if (typeof title === 'string') {
-    index += 1;
-    fields.push(`title = $${index}`);
-    values.push(title.trim());
+  const data = {}
+  if (typeof title === 'string') data.title = title.trim()
+  if (categoryId !== undefined) data.category_id = categoryId ?? null
+
+  if (Object.keys(data).length === 0) {
+    return mapDailyTask(existing)
   }
 
-  if (categoryId !== undefined) {
-    index += 1;
-    fields.push(`category_id = $${index}`);
-    values.push(categoryId || null);
-  }
+  // Prisma 不會自動改 updated_at（你的 schema 沒 @updatedAt），手動設
+  data.updated_at = new Date()
 
-  if (!fields.length) {
-    const current = await query(
-      `
-        SELECT
-          id,
-          user_id,
-          title,
-          category_id,
-          archived,
-          created_at,
-          updated_at
-        FROM daily_tasks
-        WHERE user_id = $1 AND id = $2 AND archived = FALSE
-      `,
-      [userId, taskId],
-    );
-    return mapDailyTask(current.rows[0]);
-  }
+  const row = await prisma.daily_tasks.update({
+    where: { id: taskId },
+    data,
+    select: dailyTaskSelect,
+  })
+  return mapDailyTask(row)
+}
 
-  const result = await query(
-    `
-      UPDATE daily_tasks
-         SET ${fields.join(', ')},
-             updated_at = NOW()
-       WHERE user_id = $1 AND id = $2 AND archived = FALSE
-    RETURNING
-      id,
-      user_id,
-      title,
-      category_id,
-      archived,
-      created_at,
-      updated_at
-    `,
-    values,
-  );
-
-  return mapDailyTask(result.rows[0]);
-};
-
+// ── 4) 封存（需本人且未封存） ─────────────────────────────────
 export const archiveDailyTask = async ({ userId, taskId }) => {
-  const result = await query(
-    `
-      UPDATE daily_tasks
-         SET archived = TRUE,
-             updated_at = NOW()
-       WHERE user_id = $1 AND id = $2 AND archived = FALSE
-    RETURNING
-      id,
-      user_id,
-      title,
-      category_id,
-      archived,
-      created_at,
-      updated_at
-    `,
-    [userId, taskId],
-  );
+  const existing = await prisma.daily_tasks.findFirst({
+    where: { id: taskId, user_id: userId, archived: false },
+    select: dailyTaskSelect,
+  })
+  if (!existing) return null
 
-  return mapDailyTask(result.rows[0]);
-};
+  const row = await prisma.daily_tasks.update({
+    where: { id: taskId },
+    data: { archived: true, updated_at: new Date() },
+    select: dailyTaskSelect,
+  })
+  return mapDailyTask(row)
+}
 
+// ── 5) 標記完成（upsert by 唯一鍵 (daily_task_id, completed_on)） ──
 export const markDailyTaskCompleted = async ({ userId, taskId, date }) => {
-  const result = await query(
-    `
-      INSERT INTO daily_task_completions (
-        daily_task_id,
-        completed_on
-      )
-      SELECT id, $3
-        FROM daily_tasks
-       WHERE id = $2 AND user_id = $1 AND archived = FALSE
-      ON CONFLICT (daily_task_id, completed_on)
-      DO UPDATE SET updated_at = NOW()
-      RETURNING id, daily_task_id, completed_on, created_at, updated_at
-    `,
-    [userId, taskId, date],
-  );
+  const completedOn = toDate(date)
 
-  return result.rows[0];
-};
+  return await prisma.$transaction(async (tx) => {
+    // 驗證任務歸屬且未封存
+    const ok = await tx.daily_tasks.findFirst({
+      where: { id: taskId, user_id: userId, archived: false },
+      select: { id: true },
+    })
+    if (!ok) return null
 
+    const row = await tx.daily_task_completions.upsert({
+      where: {
+        daily_task_id_completed_on: {
+          daily_task_id: taskId,
+          completed_on: completedOn,
+        },
+      },
+      create: { daily_task_id: taskId, completed_on: completedOn },
+      update: { updated_at: new Date() },
+      select: completionSelect,
+    })
+    return row
+  })
+}
+
+// ── 6) 取消當天完成（刪除該日完成紀錄；需本人且未封存） ────────
 export const resetDailyTaskCompletion = async ({ userId, taskId, date }) => {
-  const result = await query(
-    `
-      DELETE FROM daily_task_completions
-       WHERE daily_task_id = $2
-         AND completed_on = $3
-         AND EXISTS (
-           SELECT 1 FROM daily_tasks
-            WHERE id = $2 AND user_id = $1 AND archived = FALSE
-         )
-      RETURNING id, daily_task_id, completed_on, created_at, updated_at
-    `,
-    [userId, taskId, date],
-  );
+  const completedOn = toDate(date)
 
-  return result.rows[0];
-};
+  return await prisma.$transaction(async (tx) => {
+    const task = await tx.daily_tasks.findFirst({
+      where: { id: taskId, user_id: userId, archived: false },
+      select: { id: true },
+    })
+    if (!task) return null
+
+    const found = await tx.daily_task_completions.findUnique({
+      where: {
+        daily_task_id_completed_on: {
+          daily_task_id: taskId,
+          completed_on: completedOn,
+        },
+      },
+      select: completionSelect,
+    })
+    if (!found) return null
+
+    await tx.daily_task_completions.delete({
+      where: {
+        daily_task_id_completed_on: {
+          daily_task_id: taskId,
+          completed_on: completedOn,
+        },
+      },
+    })
+    return found
+  })
+}
 
 export default {
   listDailyTasks,
@@ -192,4 +187,4 @@ export default {
   archiveDailyTask,
   markDailyTaskCompleted,
   resetDailyTaskCompletion,
-};
+}

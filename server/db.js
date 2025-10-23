@@ -1,33 +1,24 @@
-import { Pool } from 'pg';
-import { getEnv, getEnvNumber, isEnvTrue } from './config/env.js';
+// server/db.js
+import { PrismaClient } from '@prisma/client'
 
-const connectionOptions = {};
+// 單例：避免 dev 熱重載產生多個連線
+const globalForPrisma = globalThis
 
-const databaseUrl = getEnv('DATABASE_URL');
+export const prisma =
+  globalForPrisma.prisma ||
+  new PrismaClient({
+    log: ['warn', 'error'], // 需要可加 'query'
+  })
 
-if (databaseUrl) {
-  connectionOptions.connectionString = databaseUrl;
-} else {
-  connectionOptions.host = getEnv('DB_HOST', 'localhost');
-  connectionOptions.port = getEnvNumber('DB_PORT', 5432);
-  connectionOptions.database = getEnv('DB_NAME', 'tomato');
-  connectionOptions.user = getEnv('DB_USER', 'tomato_user');
-  connectionOptions.password = getEnv('DB_PASSWORD', 'tomato_password');
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma
 }
 
-if (isEnvTrue('DB_SSL')) {
-  connectionOptions.ssl = {
-    rejectUnauthorized: getEnv('DB_SSL_REJECT_UNAUTHORIZED', 'true') !== 'false',
-  };
+// 優雅關閉（可選）
+const shutdown = async () => {
+  try { await prisma.$disconnect() } finally { process.exit(0) }
 }
+process.once('SIGINT', shutdown)
+process.once('SIGTERM', shutdown)
 
-const pool = new Pool(connectionOptions);
-
-pool.on('error', (err) => {
-  console.error('Unexpected Postgres idle client error', err);
-});
-
-export const query = (text, params) => pool.query(text, params);
-export const getClient = () => pool.connect();
-
-export default pool;
+export default prisma
