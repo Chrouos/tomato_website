@@ -104,6 +104,9 @@ export function TomatoTimer() {
   const [todoToDelete, setTodoToDelete] = useState(null)
   const [isDeleteTodoModalVisible, setIsDeleteTodoModalVisible] =
     useState(false)
+  const categoriesFetchKeyRef = useRef(null)
+  const dailyTasksFetchKeyRef = useRef(null)
+  const todosFetchKeyRef = useRef(null)
   const eventId = useRef(0)
   const [eventLog, setEventLog] = useState([])
   const [, setIsSyncingSession] = useState(false)
@@ -318,14 +321,23 @@ export function TomatoTimer() {
   )
 
   useEffect(() => {
+    if (!isAuthenticated || !token) {
+      categoriesFetchKeyRef.current = null
+      return
+    }
+
+    const fetchKey = token
+    if (categoriesFetchKeyRef.current === fetchKey) {
+      return
+    }
+    categoriesFetchKeyRef.current = fetchKey
+
     let cancelled = false
 
     const loadCategories = async () => {
       setIsLoadingCategories(true)
       try {
-        const response = await fetchCategories({
-          token: isAuthenticated && token ? token : undefined,
-        })
+        const response = await fetchCategories({ token })
         if (cancelled) return
 
         const items = Array.isArray(response?.items) ? response.items : []
@@ -459,17 +471,36 @@ export function TomatoTimer() {
   }, [todayKey, isAuthenticated, token, refreshDailyTasks])
 
   useEffect(() => {
-    if (!isAuthenticated || !token) return
+    if (!isAuthenticated || !token) {
+      dailyTasksFetchKeyRef.current = null
+      return
+    }
+    const fetchKey = `${token}-${todayKey}`
+    if (dailyTasksFetchKeyRef.current === fetchKey) {
+      return
+    }
+    dailyTasksFetchKeyRef.current = fetchKey
     refreshDailyTasks()
   }, [isAuthenticated, token, todayKey, refreshDailyTasks])
 
   useEffect(() => {
-    if (!isAuthenticated || !token) return
+    if (!isAuthenticated || !token) {
+      todosFetchKeyRef.current = null
+      return
+    }
+    const fetchKey = token
+    if (todosFetchKeyRef.current === fetchKey) {
+      return
+    }
+    todosFetchKeyRef.current = fetchKey
     refreshTodos()
   }, [isAuthenticated, token, refreshTodos])
 
   useEffect(() => {
     if (!isAuthenticated) {
+      categoriesFetchKeyRef.current = null
+      dailyTasksFetchKeyRef.current = null
+      todosFetchKeyRef.current = null
       setTodos([])
       setDailyTodos([])
     }
