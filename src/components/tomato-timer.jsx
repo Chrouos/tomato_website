@@ -126,6 +126,7 @@ export function TomatoTimer() {
       updatedAt: item.updatedAt ? new Date(item.updatedAt) : null,
       completedOn:
         item.completedToday || item.completedOn === todayKey ? todayKey : null,
+      completedAt: item.completedAt ? new Date(item.completedAt) : null,
     }),
     [todayKey],
   )
@@ -323,15 +324,9 @@ export function TomatoTimer() {
   useEffect(() => {
     if (!isAuthenticated || !token) {
       categoriesFetchKeyRef.current = null
+      setIsLoadingCategories(false)
       return
     }
-
-    const fetchKey = token
-    if (categoriesFetchKeyRef.current === fetchKey) {
-      return
-    }
-    categoriesFetchKeyRef.current = fetchKey
-
     let cancelled = false
 
     const loadCategories = async () => {
@@ -928,12 +923,14 @@ export function TomatoTimer() {
           })
         }
         const updatedAt = new Date().toISOString()
+        const completedAtValue = hasCompletedToday ? null : new Date()
         setDailyTodos((prev) =>
           prev.map((todo) =>
             todo.id === id
               ? {
                   ...todo,
                   completedOn: hasCompletedToday ? null : todayKey,
+                  completedAt: completedAtValue,
                   updatedAt,
                 }
               : todo,
@@ -961,12 +958,14 @@ export function TomatoTimer() {
 
     try {
       const updatedAt = new Date().toISOString()
+      const completedAtValue = hasCompletedToday ? null : new Date()
       setDailyTodos((prev) =>
         prev.map((todo) =>
           todo.id === id
             ? {
                 ...todo,
                 completedOn: hasCompletedToday ? null : todayKey,
+                completedAt: completedAtValue,
                 updatedAt,
               }
             : todo,
@@ -1452,24 +1451,7 @@ export function TomatoTimer() {
           />
         </Space>
       </Space>
-      <Space align='center' size={12} style={{ justifyContent: 'center', flexWrap: 'wrap' }}>
-        <Button
-          size='small'
-          icon={<LuMinus />}
-          onClick={() => handleAdjust(-1)}
-          disabled={isRunning || secondsLeft < ONE_HOUR}
-        >
-          1 小時
-        </Button>
-        <Button
-          size='small'
-          icon={<LuPlus />}
-          onClick={() => handleAdjust(1)}
-          disabled={isRunning}
-        >
-          1 小時
-        </Button>
-      </Space>
+      
     </Space>
   )
   const manageCategoriesSection = (
@@ -1623,60 +1605,6 @@ export function TomatoTimer() {
       }}
     >
       <Row gutter={[24, 24]}>
-        <Col xs={24} lg={12} xl={8} xxl={8} style={{ minWidth: 0 }}>
-          <Card style={timerCardStyle} styles={{ body: cardBodyStyle }}>
-            <Space direction='vertical' size={24} style={{ width: '100%' }}>
-              <Space direction='vertical' size={8} align='center'>
-                <Title level={3} style={{ margin: 0 }}>
-                  番茄鐘
-                </Title>
-              </Space>
-
-              <Space
-                direction='vertical'
-                size={24}
-                align='center'
-                style={{ width: '100%' }}
-              >
-                <div style={{ fontSize: '4rem', fontWeight: 600 }}>{timeLabel}</div>
-                <Space direction='vertical' size={4} align='center'>
-                  <AntText type='secondary' style={{ fontSize: 12 }}>
-                    目前類別
-                  </AntText>
-                  <Tag color={activeCategoryId ?? selectedCategoryId ? 'processing' : undefined}>
-                    {activeCategoryLabel}
-                  </Tag>
-                </Space>
-              </Space>
-
-              <Space
-                size={12}
-                wrap
-                style={{ width: '100%', justifyContent: 'center', display: 'flex' }}
-              >
-                <Button
-                  type='primary'
-                  size='large'
-                  icon={isRunning ? <LuPause /> : <LuPlay />}
-                  onClick={handleToggle}
-                  disabled={isStartDisabled}
-                  style={{ minWidth: 128 }}
-                >
-                  {startButtonLabel}
-                </Button>
-                <Button size='large' icon={<LuRotateCcw />} onClick={handleReset}>
-                  重置
-                </Button>
-              </Space>
-
-              <Collapse items={collapseItems} bordered={false} />
-
-              <AntText type='secondary' style={{ textAlign: 'center' }}>
-                小技巧：一次專注 25 分鐘，接著短暫休息 5 分鐘。
-              </AntText>
-            </Space>
-          </Card>
-        </Col>
 
         <Col xs={24} lg={12} xl={8} xxl={8} style={{ minWidth: 0 }}>
           <Card style={sideCardStyle} styles={{ body: cardBodyStyle }}>
@@ -1877,6 +1805,62 @@ export function TomatoTimer() {
             </Space>
           </Card>
         </Col>
+
+        <Col xs={24} lg={12} xl={8} xxl={8} style={{ minWidth: 0 }}>
+          <Card style={timerCardStyle} styles={{ body: cardBodyStyle }}>
+            <Space direction='vertical' size={24} style={{ width: '100%' }}>
+              <Space direction='vertical' size={8} align='center'>
+                <Title level={3} style={{ margin: 0 }}>
+                  番茄鐘
+                </Title>
+              </Space>
+
+              <Space
+                direction='vertical'
+                size={24}
+                align='center'
+                style={{ width: '100%' }}
+              >
+                <div style={{ fontSize: '4rem', fontWeight: 600 }}>{timeLabel}</div>
+                <Space direction='vertical' size={4} align='center'>
+                  <AntText type='secondary' style={{ fontSize: 12 }}>
+                    目前類別
+                  </AntText>
+                  <Tag color={activeCategoryId ?? selectedCategoryId ? 'processing' : undefined}>
+                    {activeCategoryLabel}
+                  </Tag>
+                </Space>
+              </Space>
+
+              <Space
+                size={12}
+                wrap
+                style={{ width: '100%', justifyContent: 'center', display: 'flex' }}
+              >
+                <Button
+                  type='primary'
+                  size='large'
+                  icon={isRunning ? <LuPause /> : <LuPlay />}
+                  onClick={handleToggle}
+                  disabled={isStartDisabled}
+                  style={{ minWidth: 128 }}
+                >
+                  {startButtonLabel}
+                </Button>
+                <Button size='large' icon={<LuRotateCcw />} onClick={handleReset}>
+                  重置
+                </Button>
+              </Space>
+
+              <Collapse items={collapseItems} bordered={false} />
+
+              <AntText type='secondary' style={{ textAlign: 'center' }}>
+                小技巧：一次專注 25 分鐘，接著短暫休息 5 分鐘。
+              </AntText>
+            </Space>
+          </Card>
+        </Col>
+
 
         <Col xs={24} lg={24} xl={8} xxl={8} style={{ minWidth: 0 }}>
           <Card style={sideCardStyle} styles={{ body: cardBodyStyle }}>
@@ -2181,6 +2165,8 @@ export function TomatoTimer() {
             </Space>
           </Card>
         </Col>
+
+
       </Row>
       <Modal
         title='刪除待辦事項'

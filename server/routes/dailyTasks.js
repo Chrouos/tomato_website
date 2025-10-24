@@ -270,6 +270,7 @@ router.post('/:id/complete', async (req, res) => {
   res.status(201).json({
     taskId: completion.daily_task_id,
     completedOn: completion.completed_on,
+    completedAt: completion.created_at,
   });
 });
 
@@ -324,6 +325,7 @@ router.delete('/:id/complete', async (req, res) => {
   res.json({
     taskId: completion.daily_task_id,
     completedOn: completion.completed_on,
+    completedAt: completion.created_at,
   });
 });
 

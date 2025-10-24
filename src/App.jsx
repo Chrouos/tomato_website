@@ -125,7 +125,7 @@ export default function App() {
           <div
             style={{
               minHeight: '100%',
-              maxWidth: 1280,
+              maxWidth: 1480,
               margin: '0 auto',
               paddingTop: 24,
               paddingBottom: 24,

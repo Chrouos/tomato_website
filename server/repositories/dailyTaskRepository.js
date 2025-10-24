@@ -15,6 +15,7 @@ const mapDailyTask = (row, completion = null) => {
     completedToday: !!completion,
     completionId: completion?.id ?? null,
     completedOn: completion?.completed_on ?? null,
+    completedAt: completion?.created_at ?? null,
   }
 }
 
