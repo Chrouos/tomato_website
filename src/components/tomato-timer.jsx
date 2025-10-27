@@ -33,6 +33,7 @@ import {
   archiveTodo as archiveTodoApi,
 } from '../lib/api.js'
 import { toaster } from './ui/toaster.jsx'
+import { useColorModeValue } from './ui/color-mode.jsx'
 
 const ONE_MINUTE = 60
 const ONE_HOUR = ONE_MINUTE * 60
@@ -1265,7 +1266,14 @@ export function TomatoTimer() {
     red: '#f5222d',
   }
   const cardMaxHeight = 'calc(100vh - 220px)'
-  const timerCardStyle = {
+  const sectionTitleColor = useColorModeValue('#1f1f1f', '#f1f5f9')
+  const secondaryTextColor = useColorModeValue('#595959', '#cbd5f5')
+  const taskCardBorderColor = useColorModeValue('#d9d9d9', 'rgba(148,163,184,0.35)')
+  const taskCardBackground = useColorModeValue('transparent', 'rgba(15,23,42,0.65)')
+  const completedCardBorderColor = useColorModeValue('#b7eb8f', '#4ade80')
+  const completedCardBackground = useColorModeValue('transparent', 'rgba(34,197,94,0.16)')
+  const subtleTextStyle = { color: secondaryTextColor }
+  const baseCardStyle = {
     width: '100%',
     maxWidth: '100%',
     minWidth: 0,
@@ -1274,16 +1282,7 @@ export function TomatoTimer() {
     flexDirection: 'column',
     overflow: 'hidden',
   }
-  const sideCardStyle = {
-    width: '100%',
-    maxWidth: '100%',
-    minWidth: 0,
-    maxHeight: cardMaxHeight,
-    display: 'flex',
-    flexDirection: 'column',
-    overflow: 'hidden',
-  }
-  const cardBodyStyle = {
+  const baseCardBodyStyle = {
     display: 'flex',
     flexDirection: 'column',
     gap: 24,
@@ -1308,7 +1307,7 @@ export function TomatoTimer() {
     fontSize: 13,
     fontWeight: 600,
     paddingTop: 10,
-    color: '#1f1f1f',
+    color: sectionTitleColor,
     letterSpacing: 0.4,
   }
   const taskListStyle = {
@@ -1319,10 +1318,10 @@ export function TomatoTimer() {
   const taskCardBaseStyle = {
     width: '100%',
     minWidth: 0,
-    border: '1px solid #d9d9d9',
+    border: `1px solid ${taskCardBorderColor}`,
     borderRadius: 12,
     padding: '12px 14px',
-    background: '#fafafa',
+    background: taskCardBackground,
     boxShadow: '0 4px 12px rgba(15, 39, 102, 0.05)',
     display: 'flex',
     flexDirection: 'column',
@@ -1330,8 +1329,8 @@ export function TomatoTimer() {
   }
   const taskCardCompletedStyle = {
     ...taskCardBaseStyle,
-    border: '1px solid #b7eb8f',
-    background: '#f6ffed',
+    border: `1px solid ${completedCardBorderColor}`,
+    background: completedCardBackground,
   }
   const getDueInfo = useCallback((dueAt) => {
     if (!dueAt) {
@@ -1589,6 +1588,12 @@ export function TomatoTimer() {
     { key: 'todo-create', label: '新增待辦事項', children: createTodoSection },
   ]
 
+  const backgroundStyle = useColorModeValue('#f7fafc', '#0f172a')
+  const cardBackground = useColorModeValue('rgba(255,255,255,0.95)', 'rgba(17,24,39,0.92)')
+
+  const sharedCardStyles = { ...baseCardStyle, background: cardBackground }
+  const sharedCardBodyStyles = { ...baseCardBodyStyle }
+
   return (
     <Space
       direction='vertical'
@@ -1601,13 +1606,15 @@ export function TomatoTimer() {
         minHeight: 0,
         overflowY: 'auto',
         boxSizing: 'border-box',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        background: backgroundStyle,
+        transition: 'background 0.3s ease'
       }}
     >
       <Row gutter={[24, 24]}>
 
         <Col xs={24} lg={12} xl={8} xxl={8} style={{ minWidth: 0 }}>
-          <Card style={sideCardStyle} styles={{ body: cardBodyStyle }}>
+          <Card style={sharedCardStyles} styles={{ body: sharedCardBodyStyles }}>
             <Space direction='vertical' size={24} style={{ width: '100%' }}>
               <Space direction='vertical' size={12} align='center'>
                 <Title level={4} style={{ margin: 0 }}>
@@ -1807,7 +1814,7 @@ export function TomatoTimer() {
         </Col>
 
         <Col xs={24} lg={12} xl={8} xxl={8} style={{ minWidth: 0 }}>
-          <Card style={timerCardStyle} styles={{ body: cardBodyStyle }}>
+          <Card style={sharedCardStyles} styles={{ body: sharedCardBodyStyles }}>
             <Space direction='vertical' size={24} style={{ width: '100%' }}>
               <Space direction='vertical' size={8} align='center'>
                 <Title level={3} style={{ margin: 0 }}>
@@ -1863,31 +1870,31 @@ export function TomatoTimer() {
 
 
         <Col xs={24} lg={24} xl={8} xxl={8} style={{ minWidth: 0 }}>
-          <Card style={sideCardStyle} styles={{ body: cardBodyStyle }}>
+          <Card style={sharedCardStyles} styles={{ body: sharedCardBodyStyles }}>
             <Space direction='vertical' size={24} style={{ width: '100%' }}>
               <Space direction='vertical' size={8} align='center'>
-                <Title level={4} style={{ margin: 0 }}>
+                <Title level={4} style={{ margin: 0, color: sectionTitleColor }}>
                   每日任務與待辦執行
                 </Title>
-                <AntText type='secondary'>
+                <AntText type='secondary' style={subtleTextStyle}>
                   在這裡勾選完成或重置每日任務與待辦事項。
                 </AntText>
               </Space>
 
               <Space direction='vertical' size={20} style={{ width: '100%' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <Title level={5} style={{ margin: 0 }}>
+                  <Title level={5} style={{ margin: 0, color: sectionTitleColor }}>
                     今日每日任務
                   </Title>
                   <div style={taskColumnsLayoutStyle}>
                     <div style={taskColumnStyle}>
                       <AntText style={taskColumnTitleStyle}>待完成</AntText>
                       {isLoadingDailyTasks ? (
-                        <AntText type='secondary' style={{ textAlign: 'center' }}>
+                        <AntText type='secondary' style={{ ...subtleTextStyle, textAlign: 'center' }}>
                           每日任務載入中…
                         </AntText>
                       ) : pendingDailyTodos.length === 0 ? (
-                        <AntText type='secondary' style={{ textAlign: 'center' }}>
+                        <AntText type='secondary' style={{ ...subtleTextStyle, textAlign: 'center' }}>
                           今日任務都完成了，太棒了！
                         </AntText>
                       ) : (
@@ -1907,7 +1914,7 @@ export function TomatoTimer() {
                                       gap: 8,
                                     }}
                                   >
-                                    <AntText strong style={{ fontSize: 14 }}>
+                                    <AntText strong style={{ fontSize: 14, color: sectionTitleColor }}>
                                       {todo.title}
                                     </AntText>
                                     <Space size={4}>
@@ -1932,7 +1939,7 @@ export function TomatoTimer() {
                                       />
                                     </Space>
                                   </div>
-                                  <AntText type='secondary' style={{ fontSize: 12 }}>
+                                  <AntText type='secondary' style={{ ...subtleTextStyle, fontSize: 12 }}>
                                     類別：{category.categoryLabel}
                                   </AntText>
                                 </Space>
@@ -1945,11 +1952,11 @@ export function TomatoTimer() {
                     <div style={taskColumnStyle}>
                       <AntText style={taskColumnTitleStyle}>已完成</AntText>
                       {isLoadingDailyTasks ? (
-                        <AntText type='secondary' style={{ textAlign: 'center' }}>
+                        <AntText type='secondary' style={{ ...subtleTextStyle, textAlign: 'center' }}>
                           每日任務載入中…
                         </AntText>
                       ) : completedDailyTodos.length === 0 ? (
-                        <AntText type='secondary' style={{ textAlign: 'center' }}>
+                        <AntText type='secondary' style={{ ...subtleTextStyle, textAlign: 'center' }}>
                           尚未有完成的每日任務。
                         </AntText>
                       ) : (
@@ -1972,7 +1979,7 @@ export function TomatoTimer() {
                                       gap: 8,
                                     }}
                                   >
-                                    <AntText strong style={{ fontSize: 14 }}>
+                                    <AntText strong style={{ fontSize: 14, color: sectionTitleColor }}>
                                       {todo.title}
                                     </AntText>
                                     <Space size={4}>
@@ -1996,10 +2003,10 @@ export function TomatoTimer() {
                                       />
                                     </Space>
                                   </div>
-                                  <AntText type='secondary' style={{ fontSize: 12 }}>
+                                  <AntText type='secondary' style={{ ...subtleTextStyle, fontSize: 12 }}>
                                     類別：{category.categoryLabel}
                                   </AntText>
-                                  <AntText type='secondary' style={{ fontSize: 12 }}>
+                                  <AntText type='secondary' style={{ ...subtleTextStyle, fontSize: 12 }}>
                                     完成於：{completedAtLabel}
                                   </AntText>
                                 </Space>
@@ -2013,18 +2020,18 @@ export function TomatoTimer() {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <Title level={5} style={{ margin: 0 }}>
+                  <Title level={5} style={{ margin: 0, color: sectionTitleColor }}>
                     待辦事項
                   </Title>
                   <div style={taskColumnsLayoutStyle}>
                     <div style={taskColumnStyle}>
                       <AntText style={taskColumnTitleStyle}>待完成</AntText>
                       {isLoadingTodosRemote ? (
-                        <AntText type='secondary' style={{ textAlign: 'center' }}>
+                        <AntText type='secondary' style={{ ...subtleTextStyle, textAlign: 'center' }}>
                           待辦事項載入中…
                         </AntText>
                       ) : pendingTodos.length === 0 ? (
-                        <AntText type='secondary' style={{ textAlign: 'center' }}>
+                        <AntText type='secondary' style={{ ...subtleTextStyle, textAlign: 'center' }}>
                           尚未新增待辦事項。
                         </AntText>
                       ) : (
@@ -2044,7 +2051,7 @@ export function TomatoTimer() {
                                       gap: 8,
                                     }}
                                   >
-                                    <AntText strong style={{ fontSize: 14 }}>
+                                    <AntText strong style={{ fontSize: 14, color: sectionTitleColor }}>
                                       {todo.title}
                                     </AntText>
                                     <Space size={4}>
@@ -2068,10 +2075,10 @@ export function TomatoTimer() {
                                       />
                                     </Space>
                                   </div>
-                                  <AntText type='secondary' style={{ fontSize: 12 }}>
+                                  <AntText type='secondary' style={{ ...subtleTextStyle, fontSize: 12 }}>
                                     類別：{category.categoryLabel}
                                   </AntText>
-                                  <AntText type='secondary' style={{ fontSize: 12 }}>
+                                  <AntText type='secondary' style={{ ...subtleTextStyle, fontSize: 12 }}>
                                     截止：{dueInfo.dateLabel}
                                   </AntText>
                                   <AntText
@@ -2090,11 +2097,11 @@ export function TomatoTimer() {
                     <div style={taskColumnStyle}>
                       <AntText style={taskColumnTitleStyle}>已完成</AntText>
                       {isLoadingTodosRemote ? (
-                        <AntText type='secondary' style={{ textAlign: 'center' }}>
+                        <AntText type='secondary' style={{ ...subtleTextStyle, textAlign: 'center' }}>
                           待辦事項載入中…
                         </AntText>
                       ) : completedTodos.length === 0 ? (
-                        <AntText type='secondary' style={{ textAlign: 'center' }}>
+                        <AntText type='secondary' style={{ ...subtleTextStyle, textAlign: 'center' }}>
                           還沒有完成的待辦。
                         </AntText>
                       ) : (
@@ -2114,7 +2121,7 @@ export function TomatoTimer() {
                                       gap: 8,
                                     }}
                                   >
-                                    <AntText strong style={{ fontSize: 14 }}>
+                                    <AntText strong style={{ fontSize: 14, color: sectionTitleColor }}>
                                       {todo.title}
                                     </AntText>
                                     <Space size={4}>
@@ -2137,10 +2144,10 @@ export function TomatoTimer() {
                                       />
                                     </Space>
                                   </div>
-                                  <AntText type='secondary' style={{ fontSize: 12 }}>
+                                  <AntText type='secondary' style={{ ...subtleTextStyle, fontSize: 12 }}>
                                     類別：{category.categoryLabel}
                                   </AntText>
-                                  <AntText type='secondary' style={{ fontSize: 12 }}>
+                                  <AntText type='secondary' style={{ ...subtleTextStyle, fontSize: 12 }}>
                                     截止：{dueInfo.dateLabel}
                                   </AntText>
                                   <AntText
@@ -2149,7 +2156,7 @@ export function TomatoTimer() {
                                   >
                                     {dueInfo.status === 'none' ? '未設定提醒' : dueInfo.hoursText}
                                   </AntText>
-                                  <AntText type='secondary' style={{ fontSize: 12 }}>
+                                  <AntText type='secondary' style={{ ...subtleTextStyle, fontSize: 12 }}>
                                     完成於：{todo.completedAt ? formatTimeOfDay(todo.completedAt) : '—'}
                                   </AntText>
                                 </Space>

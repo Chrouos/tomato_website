@@ -57,9 +57,9 @@ export const ColorModeButton = React.forwardRef(function ColorModeButton(props, 
 })
 
 export const LightMode = React.forwardRef(function LightMode(props, ref) {
-  return <span data-theme='light' ref={ref} {...props} />
+  return <span data-theme='light' style={{ display: 'contents' }} ref={ref} {...props} />
 })
 
 export const DarkMode = React.forwardRef(function DarkMode(props, ref) {
-  return <span data-theme='dark' ref={ref} {...props} />
+  return <span data-theme='dark' style={{ display: 'contents' }} ref={ref} {...props} />
 })
