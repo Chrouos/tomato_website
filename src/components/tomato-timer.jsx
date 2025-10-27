@@ -1269,9 +1269,9 @@ export function TomatoTimer() {
   const sectionTitleColor = useColorModeValue('#1f1f1f', '#f1f5f9')
   const secondaryTextColor = useColorModeValue('#595959', '#cbd5f5')
   const taskCardBorderColor = useColorModeValue('#d9d9d9', 'rgba(148,163,184,0.35)')
-  const taskCardBackground = useColorModeValue('transparent', 'rgba(15,23,42,0.65)')
+  const taskCardBackground = useColorModeValue('#fafafa', 'rgba(15,23,42,0.65)')
   const completedCardBorderColor = useColorModeValue('#b7eb8f', '#4ade80')
-  const completedCardBackground = useColorModeValue('transparent', 'rgba(34,197,94,0.16)')
+  const completedCardBackground = useColorModeValue('#f6ffed', 'rgba(34,197,94,0.16)')
   const subtleTextStyle = { color: secondaryTextColor }
   const baseCardStyle = {
     width: '100%',
@@ -1588,7 +1588,7 @@ export function TomatoTimer() {
     { key: 'todo-create', label: '新增待辦事項', children: createTodoSection },
   ]
 
-  const backgroundStyle = useColorModeValue('#f7fafc', '#0f172a')
+  const backgroundStyle = useColorModeValue('#f7fafc0', '#0f172a0')
   const cardBackground = useColorModeValue('rgba(255,255,255,0.95)', 'rgba(17,24,39,0.92)')
 
   const sharedCardStyles = { ...baseCardStyle, background: cardBackground }
@@ -1600,7 +1600,8 @@ export function TomatoTimer() {
       size={24}
       style={{
         width: '100%',
-        paddingBottom: 24,
+        padding: 15,
+        // paddingBottom: 24,
         paddingRight: 8,
         height: '100%',
         minHeight: 0,
