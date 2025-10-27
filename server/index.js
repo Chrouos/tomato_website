@@ -10,6 +10,7 @@ import eventsRouter from './routes/events.js';
 import categoriesRouter from './routes/categories.js';
 import dailyTasksRouter from './routes/dailyTasks.js';
 import todosRouter from './routes/todos.js';
+import studyGroupsRouter from './routes/studyGroups.js';
 import { getEnv, getEnvNumber } from './config/env.js';
 import { ensureDefaultCategories } from './repositories/categoryRepository.js';
 import { ensureTodoSchema } from './repositories/todoRepository.js';
@@ -35,6 +36,7 @@ app.use('/events', eventsRouter);
 app.use('/categories', categoriesRouter);
 app.use('/daily-tasks', dailyTasksRouter);
 app.use('/todos', todosRouter);
+app.use('/study-groups', studyGroupsRouter);
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true }));
 
 const port = getEnvNumber('SERVER_PORT', 4000);

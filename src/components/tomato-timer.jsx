@@ -33,6 +33,7 @@ import {
   archiveTodo as archiveTodoApi,
 } from '../lib/api.js'
 import { toaster } from './ui/toaster.jsx'
+import { StudyGroupPanel } from './study-group-panel.jsx'
 import { useColorModeValue } from './ui/color-mode.jsx'
 
 const ONE_MINUTE = 60
@@ -2171,6 +2172,12 @@ export function TomatoTimer() {
                 </div>
               </Space>
             </Space>
+          </Card>
+        </Col>
+
+        <Col xs={24} lg={24} xl={24} xxl={24} style={{ minWidth: 0 }}>
+          <Card style={sharedCardStyles} styles={{ body: sharedCardBodyStyles }}>
+            <StudyGroupPanel token={token} />
           </Card>
         </Col>
 

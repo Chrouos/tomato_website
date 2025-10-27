@@ -144,6 +144,43 @@ CREATE TRIGGER set_todos_updated_at
 BEFORE UPDATE ON todos
 FOR EACH ROW
 EXECUTE FUNCTION trigger_set_timestamp();
+
+CREATE TABLE IF NOT EXISTS study_groups (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  invite_code TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS study_groups_owner_id_idx ON study_groups(owner_id);
+
+CREATE TRIGGER set_study_groups_updated_at
+BEFORE UPDATE ON study_groups
+FOR EACH ROW
+EXECUTE FUNCTION trigger_set_timestamp();
+
+CREATE TABLE IF NOT EXISTS study_group_members (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  group_id UUID NOT NULL REFERENCES study_groups(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role TEXT NOT NULL DEFAULT 'member',
+  joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_seen_at TIMESTAMPTZ,
+  display_name TEXT
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS study_group_members_group_user_idx
+  ON study_group_members(group_id, user_id);
+
+CREATE INDEX IF NOT EXISTS study_group_members_user_id_idx
+  ON study_group_members(user_id);
+
+CREATE TRIGGER set_study_group_members_updated_at
+BEFORE UPDATE ON study_group_members
+FOR EACH ROW
+EXECUTE FUNCTION trigger_set_timestamp();
 ```
 
 資料表關聯說明：
@@ -156,6 +193,8 @@ EXECUTE FUNCTION trigger_set_timestamp();
 - `daily_tasks`：儲存使用者的每日任務項目。
 - `daily_task_completions`：紀錄每日任務在特定日期的完成狀態，每個任務每天僅一筆。
 - `todos`：一般待辦事項，包含完成狀態與完成時間。
+- `study_groups`：共讀群組主表，儲存群組名稱、擁有者與邀請碼。
+- `study_group_members`：共讀群組成員表，記錄加入的使用者、角色、最後上線時間與自訂顯示名稱。
 
 ## 欄位說明與建議值
 

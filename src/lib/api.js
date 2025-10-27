@@ -200,6 +200,44 @@ export const archiveTodo = ({ token, todoId }) =>
     token,
   });
 
+export const fetchStudyGroups = ({ token }) =>
+  apiRequest('/study-groups', {
+    method: 'GET',
+    token,
+  });
+
+export const createStudyGroup = ({ token, name }) =>
+  apiRequest('/study-groups', {
+    method: 'POST',
+    token,
+    body: { name },
+  });
+
+export const joinStudyGroup = ({ token, inviteCode }) =>
+  apiRequest('/study-groups/join', {
+    method: 'POST',
+    token,
+    body: { inviteCode },
+  });
+
+export const fetchStudyGroupDetail = ({ token, groupId }) =>
+  apiRequest(`/study-groups/${encodeURIComponent(groupId)}`, {
+    method: 'GET',
+    token,
+  });
+
+export const pingStudyGroup = ({ token, groupId }) =>
+  apiRequest(`/study-groups/${encodeURIComponent(groupId)}/ping`, {
+    method: 'POST',
+    token,
+  });
+
+export const leaveStudyGroup = ({ token, groupId }) =>
+  apiRequest(`/study-groups/${encodeURIComponent(groupId)}`, {
+    method: 'DELETE',
+    token,
+  });
+
 export default {
   requestEmailVerificationCode,
   registerWithEmail,
@@ -224,4 +262,10 @@ export default {
   completeTodo,
   reopenTodo,
   archiveTodo,
+  fetchStudyGroups,
+  createStudyGroup,
+  joinStudyGroup,
+  fetchStudyGroupDetail,
+  pingStudyGroup,
+  leaveStudyGroup,
 };
