@@ -124,12 +124,54 @@ model study_group_members {
   role          String       @default("member")
   joined_at     DateTime     @default(now()) @db.Timestamptz(6)
   last_seen_at  DateTime?    @db.Timestamptz(6)
+  updated_at    DateTime     @default(now()) @updatedAt @db.Timestamptz(6)
   display_name  String?
   group         study_groups @relation(fields: [group_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   user          users        @relation("StudyGroupMembers", fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([group_id, user_id])
   @@index([user_id])
+}
+
+model encouragement_balances {
+  user_id    String   @id @db.Uuid
+  credits    Int      @default(0)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  user       users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model encouragement_credit_events {
+  id           String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id      String   @db.Uuid
+  change       Int
+  reason       String
+  reference_id String?  @db.Uuid
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
+  user         users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id])
+  @@index([reason])
+  @@unique([reason, reference_id])
+}
+
+model encouragement_letters {
+  id                    String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  sender_id             String   @db.Uuid
+  recipient_id          String   @db.Uuid
+  sender_message        String
+  reply_message         String?
+  sender_sent_at        DateTime @default(now()) @db.Timestamptz(6)
+  recipient_replied_at  DateTime? @db.Timestamptz(6)
+  recipient_read_at     DateTime? @db.Timestamptz(6)
+  sender_reply_read_at  DateTime? @db.Timestamptz(6)
+  status                String   @default("delivered")
+  created_at            DateTime @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  sender                users    @relation("EncouragementSender", fields: [sender_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  recipient             users    @relation("EncouragementRecipient", fields: [recipient_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([sender_id])
+  @@index([recipient_id])
 }
 
 model users {
@@ -148,6 +190,10 @@ model users {
   todos          todos[]
   owned_groups   study_groups[]       @relation("StudyGroupOwner")
   group_memberships study_group_members[] @relation("StudyGroupMembers")
+  encouragement_balance encouragement_balances?
+  encouragement_credit_events encouragement_credit_events[]
+  sent_letters   encouragement_letters[] @relation("EncouragementSender")
+  received_letters encouragement_letters[] @relation("EncouragementRecipient")
 
   @@unique([provider, provider_id], map: "users_provider_id_idx")
 }

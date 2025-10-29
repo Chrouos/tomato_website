@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Card, Collapse, Col, DatePicker, Input, InputNumber, Modal, Row, Space, Spin, Tag, Typography } from 'antd'
+import { Button, Card, Collapse, Col, DatePicker, Input, InputNumber, Modal, Row, Space, Spin, Tag, Tooltip, Typography } from 'antd'
 import dayjs from 'dayjs'
 import {
   LuCalendar,
@@ -13,6 +13,8 @@ import {
   LuRotateCcw,
   LuTrash2,
   LuX,
+  LuMail,
+  LuUsers,
 } from 'react-icons/lu'
 import { useAuth } from '../lib/auth-context.jsx'
 import {
@@ -33,7 +35,9 @@ import {
   archiveTodo as archiveTodoApi,
 } from '../lib/api.js'
 import { toaster } from './ui/toaster.jsx'
-import { StudyGroupPanel } from './study-group-panel.jsx'
+import { EncouragementModal } from './modals/encouragement-modal.jsx'
+import { StudyGroupModal } from './modals/study-group-modal.jsx'
+import { StudyGroupSummary } from './study-group-summary.jsx'
 import { useColorModeValue } from './ui/color-mode.jsx'
 
 const ONE_MINUTE = 60
@@ -117,6 +121,8 @@ export function TomatoTimer() {
   const [isLoadingCategories, setIsLoadingCategories] = useState(true)
   const [isSavingCategory, setIsSavingCategory] = useState(false)
   const [deletingCategoryId, setDeletingCategoryId] = useState(null)
+  const [isEncouragementOpen, setIsEncouragementOpen] = useState(false)
+  const [isStudyGroupOpen, setIsStudyGroupOpen] = useState(false)
 
   const mapDailyTaskFromApi = useCallback(
     (item) => ({
@@ -211,7 +217,17 @@ export function TomatoTimer() {
             payload: detail,
             occurredAt: occurredAt.toISOString(),
           },
-        }).catch((error) => {
+        })
+          .then(() => {
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(
+                new CustomEvent('tomato:session-event-recorded', {
+                  detail: { eventType: type, occurredAt: occurredAt.toISOString() },
+                }),
+              )
+            }
+          })
+          .catch((error) => {
           console.warn('Failed to record event', error)
         })
       }
@@ -1274,6 +1290,10 @@ export function TomatoTimer() {
   const completedCardBorderColor = useColorModeValue('#b7eb8f', '#4ade80')
   const completedCardBackground = useColorModeValue('#f6ffed', 'rgba(34,197,94,0.16)')
   const subtleTextStyle = { color: secondaryTextColor }
+  const quickActionMailBg = useColorModeValue('#eff6ff', '#1f2937')
+  const quickActionMailColor = useColorModeValue('#1d4ed8', '#60a5fa')
+  const quickActionGroupBg = useColorModeValue('#fdf4ff', '#24104f')
+  const quickActionGroupColor = useColorModeValue('#a21caf', '#f472b6')
   const baseCardStyle = {
     width: '100%',
     maxWidth: '100%',
@@ -1613,8 +1633,45 @@ export function TomatoTimer() {
         transition: 'background 0.3s ease'
       }}
     >
-      <Row gutter={[24, 24]}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%', gap: 12 }}>
+        <Tooltip title='打開匿名鼓勵信箱'>
+          <Button
+            type='primary'
+            shape='circle'
+            size='large'
+            icon={<LuMail size={20} />}
+            onClick={() => setIsEncouragementOpen(true)}
+            aria-label='開啟匿名鼓勵信箱'
+            disabled={!isAuthenticated}
+            style={{
+              background: quickActionMailBg,
+              color: quickActionMailColor,
+              border: 'none',
+              boxShadow: '0 8px 18px rgba(29, 78, 216, 0.25)',
+            }}
+          />
+        </Tooltip>
+        <Tooltip title='查看共讀群組'>
+          <Button
+            type='primary'
+            shape='circle'
+            size='large'
+            icon={<LuUsers size={20} />}
+            onClick={() => setIsStudyGroupOpen(true)}
+            aria-label='開啟共讀群組面板'
+            disabled={!isAuthenticated}
+            style={{
+              background: quickActionGroupBg,
+              color: quickActionGroupColor,
+              border: 'none',
+              boxShadow: '0 8px 18px rgba(162, 28, 175, 0.25)',
+            }}
+          />
+        </Tooltip>
+      </div>
 
+      <Row gutter={[24, 24]}>
+     
         <Col xs={24} lg={12} xl={8} xxl={8} style={{ minWidth: 0 }}>
           <Card style={sharedCardStyles} styles={{ body: sharedCardBodyStyles }}>
             <Space direction='vertical' size={24} style={{ width: '100%' }}>
@@ -2174,13 +2231,11 @@ export function TomatoTimer() {
             </Space>
           </Card>
         </Col>
-
-        <Col xs={24} lg={24} xl={24} xxl={24} style={{ minWidth: 0 }}>
+   <Col xs={24} style={{ minWidth: 0 }}>
           <Card style={sharedCardStyles} styles={{ body: sharedCardBodyStyles }}>
-            <StudyGroupPanel token={token} />
+            <StudyGroupSummary token={token} onOpenDetail={() => setIsStudyGroupOpen(true)} />
           </Card>
         </Col>
-
 
       </Row>
       <Modal
@@ -2233,6 +2288,16 @@ export function TomatoTimer() {
           確定要刪除分類「{categoryToDelete?.label ?? ''}」嗎？已建立的待辦與每日任務會保留，但會失去此分類連結。
         </AntText>
       </Modal>
+      <EncouragementModal
+        token={token}
+        open={isEncouragementOpen && isAuthenticated}
+        onClose={() => setIsEncouragementOpen(false)}
+      />
+      <StudyGroupModal
+        token={token}
+        open={isStudyGroupOpen && isAuthenticated}
+        onClose={() => setIsStudyGroupOpen(false)}
+      />
     </Space>
   )
 }

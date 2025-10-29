@@ -1,6 +1,6 @@
 'use client'
 
-import { ConfigProvider, theme as antdTheme } from 'antd'
+import { App as AntdApp, ConfigProvider, theme as antdTheme } from 'antd'
 import { ColorModeProvider, useColorModeValue } from './color-mode'
 
 const lightThemeTokens = {
@@ -42,7 +42,7 @@ function AntdThemeBridge({ children }) {
         },
       }}
     >
-      {children}
+      <AntdApp>{children}</AntdApp>
     </ConfigProvider>
   )
 }

@@ -15,7 +15,7 @@ CREATE INDEX IF NOT EXISTS "study_groups_owner_id_idx"
   ON "study_groups" ("owner_id");
 
 -- Trigger to maintain updated_at (optional if DB already has generic trigger)
-CREATE TRIGGER IF NOT EXISTS "set_study_groups_updated_at"
+CREATE TRIGGER "set_study_groups_updated_at"
 BEFORE UPDATE ON "study_groups"
 FOR EACH ROW
 EXECUTE FUNCTION trigger_set_timestamp();
@@ -43,7 +43,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS "study_group_members_group_user_idx"
 CREATE INDEX IF NOT EXISTS "study_group_members_user_id_idx"
   ON "study_group_members" ("user_id");
 
-CREATE TRIGGER IF NOT EXISTS "set_study_group_members_updated_at"
+CREATE TRIGGER "set_study_group_members_updated_at"
 BEFORE UPDATE ON "study_group_members"
 FOR EACH ROW
 EXECUTE FUNCTION trigger_set_timestamp();

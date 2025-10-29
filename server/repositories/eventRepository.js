@@ -28,15 +28,25 @@ const toDate = (v) => (v ? (v instanceof Date ? v : new Date(v)) : undefined)
 
 /** 建立事件 */
 export const createEvent = async ({ userId, sessionKey, eventType, payload, occurredAt }) => {
-  const row = await prisma.session_events.create({
-    data: {
-      user_id: userId,
-      session_key: sessionKey ?? null,
-      event_type: eventType,
-      payload: payload ?? null,
-      occurred_at: occurredAt ? toDate(occurredAt) : new Date(), // 與原本 NOW() 一致
-    },
-    select: selectFields,
+  const occurredAtDate = occurredAt ? toDate(occurredAt) : new Date()
+  const row = await prisma.$transaction(async (tx) => {
+    const created = await tx.session_events.create({
+      data: {
+        user_id: userId,
+        session_key: sessionKey ?? null,
+        event_type: eventType,
+        payload: payload ?? null,
+        occurred_at: occurredAtDate, // 與原本 NOW() 一致
+      },
+      select: selectFields,
+    })
+
+    await tx.study_group_members.updateMany({
+      where: { user_id: userId },
+      data: { last_seen_at: new Date() },
+    })
+
+    return created
   })
   return mapEvent(row)
 }

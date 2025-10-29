@@ -238,6 +238,50 @@ export const leaveStudyGroup = ({ token, groupId }) =>
     token,
   });
 
+export const fetchEncouragementSummary = ({ token }) =>
+  apiRequest('/encouragement/summary', {
+    method: 'GET',
+    token,
+  });
+
+export const fetchEncouragementInbox = ({ token }) =>
+  apiRequest('/encouragement/inbox', {
+    method: 'GET',
+    token,
+  });
+
+export const fetchEncouragementSent = ({ token }) =>
+  apiRequest('/encouragement/sent', {
+    method: 'GET',
+    token,
+  });
+
+export const sendEncouragementLetter = ({ token, message }) =>
+  apiRequest('/encouragement/send', {
+    method: 'POST',
+    token,
+    body: { message },
+  });
+
+export const replyEncouragementLetter = ({ token, letterId, message }) =>
+  apiRequest(`/encouragement/letters/${encodeURIComponent(letterId)}/reply`, {
+    method: 'POST',
+    token,
+    body: { message },
+  });
+
+export const markEncouragementLetterRead = ({ token, letterId }) =>
+  apiRequest(`/encouragement/letters/${encodeURIComponent(letterId)}/read`, {
+    method: 'POST',
+    token,
+  });
+
+export const markEncouragementReplyRead = ({ token, letterId }) =>
+  apiRequest(`/encouragement/letters/${encodeURIComponent(letterId)}/read-reply`, {
+    method: 'POST',
+    token,
+  });
+
 export default {
   requestEmailVerificationCode,
   registerWithEmail,
@@ -268,4 +312,11 @@ export default {
   fetchStudyGroupDetail,
   pingStudyGroup,
   leaveStudyGroup,
+  fetchEncouragementSummary,
+  fetchEncouragementInbox,
+  fetchEncouragementSent,
+  sendEncouragementLetter,
+  replyEncouragementLetter,
+  markEncouragementLetterRead,
+  markEncouragementReplyRead,
 };

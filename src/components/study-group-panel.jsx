@@ -12,7 +12,7 @@ import {
 import { useColorModeValue } from './ui/color-mode.jsx'
 import { toaster } from './ui/toaster.jsx'
 
-const formatDuration = (seconds) => {
+export const formatStudyDuration = (seconds) => {
   const total = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0
   const hours = Math.floor(total / 3600)
   const minutes = Math.floor((total % 3600) / 60)
@@ -98,6 +98,20 @@ export function StudyGroupPanel({ token }) {
     }
     refreshGroupDetail(selectedGroupId)
   }, [refreshGroupDetail, selectedGroupId])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined
+    }
+    const handleSessionEvent = () => {
+      if (!token || !selectedGroupId) return
+      refreshGroupDetail(selectedGroupId)
+    }
+    window.addEventListener('tomato:session-event-recorded', handleSessionEvent)
+    return () => {
+      window.removeEventListener('tomato:session-event-recorded', handleSessionEvent)
+    }
+  }, [token, selectedGroupId, refreshGroupDetail])
 
   useEffect(() => {
     if (groups.length === 0) {
@@ -358,7 +372,7 @@ export function StudyGroupPanel({ token }) {
                       </Space>
                       <Space direction='vertical' size={2}>
                         <Text style={{ color: secondaryColor }}>
-                          今日專注時間：{formatDuration(member.studySecondsToday)}
+                          今日專注時間：{formatStudyDuration(member.studySecondsToday)}
                         </Text>
                         <Text style={{ color: secondaryColor }}>
                           今日完成待辦：{member.completedTodosToday}

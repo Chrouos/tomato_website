@@ -181,6 +181,58 @@ CREATE TRIGGER set_study_group_members_updated_at
 BEFORE UPDATE ON study_group_members
 FOR EACH ROW
 EXECUTE FUNCTION trigger_set_timestamp();
+
+CREATE TABLE IF NOT EXISTS encouragement_balances (
+  user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  credits INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TRIGGER set_encouragement_balances_updated_at
+BEFORE UPDATE ON encouragement_balances
+FOR EACH ROW
+EXECUTE FUNCTION trigger_set_timestamp();
+
+CREATE TABLE IF NOT EXISTS encouragement_credit_events (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  change INTEGER NOT NULL,
+  reason TEXT NOT NULL,
+  reference_id UUID,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS encouragement_credit_events_user_id_idx
+  ON encouragement_credit_events(user_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS encouragement_credit_events_reason_reference_idx
+  ON encouragement_credit_events(reason, reference_id);
+
+CREATE TABLE IF NOT EXISTS encouragement_letters (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  recipient_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  sender_message TEXT NOT NULL,
+  reply_message TEXT,
+  sender_sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  recipient_replied_at TIMESTAMPTZ,
+  recipient_read_at TIMESTAMPTZ,
+  sender_reply_read_at TIMESTAMPTZ,
+  status TEXT NOT NULL DEFAULT 'delivered',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS encouragement_letters_sender_id_idx
+  ON encouragement_letters(sender_id);
+
+CREATE INDEX IF NOT EXISTS encouragement_letters_recipient_id_idx
+  ON encouragement_letters(recipient_id);
+
+CREATE TRIGGER set_encouragement_letters_updated_at
+BEFORE UPDATE ON encouragement_letters
+FOR EACH ROW
+EXECUTE FUNCTION trigger_set_timestamp();
 ```
 
 資料表關聯說明：
@@ -195,6 +247,9 @@ EXECUTE FUNCTION trigger_set_timestamp();
 - `todos`：一般待辦事項，包含完成狀態與完成時間。
 - `study_groups`：共讀群組主表，儲存群組名稱、擁有者與邀請碼。
 - `study_group_members`：共讀群組成員表，記錄加入的使用者、角色、最後上線時間與自訂顯示名稱。
+- `encouragement_balances`：使用者匿名鼓勵信的剩餘額度。
+- `encouragement_credit_events`：鼓勵額度異動紀錄（完成 25 分鐘番茄鐘、送出信件等）。
+- `encouragement_letters`：匿名鼓勵信的內容與單次回覆，僅紀錄彼此對話。
 
 ## 欄位說明與建議值
 

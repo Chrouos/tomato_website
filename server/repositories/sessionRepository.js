@@ -1,5 +1,6 @@
 // server/repositories/sessionRepository.js
 import { prisma } from '../db.js'
+import { grantCreditForSession } from './encouragementRepository.js'
 
 const selectFields = {
   id: true,
@@ -51,6 +52,13 @@ export const createSession = async ({
     },
     select: selectFields,
   })
+  if (durationSeconds >= 25 * 60) {
+    try {
+      await grantCreditForSession({ userId, sessionId: row.id, amount: 1 })
+    } catch (error) {
+      console.error('Failed to grant encouragement credit', error)
+    }
+  }
   return mapSession(row)
 }
 
