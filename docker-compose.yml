@@ -4,7 +4,9 @@ services:
     container_name: tomato-postgres
     restart: unless-stopped
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      # Default host port set to 6543 to match DATABASE_URL in local env files.
+      # Override POSTGRES_PORT when you need to run Postgres on a different host port.
+      - "${POSTGRES_PORT:-6543}:5432"
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-tomato}
       POSTGRES_USER: ${POSTGRES_USER:-tomato_user}
