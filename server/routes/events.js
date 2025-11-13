@@ -1,9 +1,11 @@
-import { Router } from 'express';
-import authenticate from '../middleware/authMiddleware.js';
-import ensureUserExists from '../middleware/ensureUserExists.js';
-import { createEvent, listEventsByUser } from '../repositories/eventRepository.js';
+import { Router } from 'express'
+import authenticate from '../middleware/authMiddleware.js'
+import ensureUserExists from '../middleware/ensureUserExists.js'
+import { createEvent, listEventsByUser } from '../repositories/eventRepository.js'
+import { publishToUser, publishToUsers } from '../lib/sseHub.js'
+import { broadcastStudyGroupPresence } from '../services/studyGroupPresence.js'
 
-const router = Router();
+const router = Router()
 
 /**
  * @openapi
@@ -68,18 +70,18 @@ const router = Router();
  *         description: 未授權
  */
 router.get('/', authenticate, ensureUserExists, async (req, res) => {
-  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 200, 1), 500);
-  const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
-  const from = req.query.from ? new Date(req.query.from) : undefined;
-  const to = req.query.to ? new Date(req.query.to) : undefined;
-  const sessionKey = req.query.sessionKey?.trim();
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 200, 1), 500)
+  const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0)
+  const from = req.query.from ? new Date(req.query.from) : undefined
+  const to = req.query.to ? new Date(req.query.to) : undefined
+  const sessionKey = req.query.sessionKey?.trim()
 
   if (from && Number.isNaN(from.getTime())) {
-    return res.status(400).json({ error: 'from 不是有效日期' });
+    return res.status(400).json({ error: 'from 不是有效日期' })
   }
 
   if (to && Number.isNaN(to.getTime())) {
-    return res.status(400).json({ error: 'to 不是有效日期' });
+    return res.status(400).json({ error: 'to 不是有效日期' })
   }
 
   const items = await listEventsByUser({
@@ -89,10 +91,10 @@ router.get('/', authenticate, ensureUserExists, async (req, res) => {
     sessionKey: sessionKey || undefined,
     limit,
     offset,
-  });
+  })
 
-  res.json({ items });
-});
+  res.json({ items })
+})
 
 /**
  * @openapi
@@ -123,10 +125,10 @@ router.get('/', authenticate, ensureUserExists, async (req, res) => {
  */
 router.post('/', authenticate, ensureUserExists, async (req, res) => {
   try {
-    const { eventType, sessionKey, payload, occurredAt } = req.body ?? {};
+    const { eventType, sessionKey, payload, occurredAt } = req.body ?? {}
 
     if (!eventType || typeof eventType !== 'string') {
-      return res.status(400).json({ error: '缺少 eventType' });
+      return res.status(400).json({ error: '缺少 eventType' })
     }
 
     const event = await createEvent({
@@ -135,12 +137,20 @@ router.post('/', authenticate, ensureUserExists, async (req, res) => {
       eventType,
       payload: payload ?? null,
       occurredAt: occurredAt ? new Date(occurredAt) : new Date(),
-    });
+    })
 
-    res.status(201).json(event);
+    res.status(201).json(event)
+
+    publishToUser(req.user.id, 'session:recorded', {
+      userId: req.user.id,
+      event,
+    })
+    broadcastStudyGroupPresence({ userId: req.user.id }).catch((err) => {
+      console.error('Failed to broadcast study group presence', err)
+    })
   } catch (error) {
-    res.status(400).json({ error: error.message ?? '紀錄事件失敗' });
+    res.status(400).json({ error: error.message ?? '紀錄事件失敗' })
   }
-});
+})
 
-export default router;
+export default router

@@ -9,6 +9,7 @@ import {
   markDailyTaskCompleted,
   resetDailyTaskCompletion,
 } from '../repositories/dailyTaskRepository.js';
+import { publishToUser } from '../lib/sseHub.js';
 
 const router = Router();
 
@@ -122,6 +123,10 @@ router.post('/', async (req, res) => {
   });
 
   res.status(201).json(task);
+  publishToUser(req.user.id, 'daily-task:changed', {
+    action: 'create',
+    task,
+  });
 });
 
 /**
@@ -172,6 +177,10 @@ router.patch('/:id', async (req, res) => {
   }
 
   res.json(task);
+  publishToUser(req.user.id, 'daily-task:changed', {
+    action: 'update',
+    task,
+  });
 });
 
 /**
@@ -213,6 +222,10 @@ router.delete('/:id', async (req, res) => {
   }
 
   res.json(task);
+  publishToUser(req.user.id, 'daily-task:changed', {
+    action: 'archive',
+    taskId: req.params.id,
+  });
 });
 
 /**
@@ -272,6 +285,11 @@ router.post('/:id/complete', async (req, res) => {
     completedOn: completion.completed_on,
     completedAt: completion.created_at,
   });
+  publishToUser(req.user.id, 'daily-task:changed', {
+    action: 'complete',
+    taskId: completion.daily_task_id,
+    completedOn: completion.completed_on,
+  });
 });
 
 /**
@@ -326,6 +344,11 @@ router.delete('/:id/complete', async (req, res) => {
     taskId: completion.daily_task_id,
     completedOn: completion.completed_on,
     completedAt: completion.created_at,
+  });
+  publishToUser(req.user.id, 'daily-task:changed', {
+    action: 'reset',
+    taskId: completion.daily_task_id,
+    completedOn: completion.completed_on,
   });
 });
 

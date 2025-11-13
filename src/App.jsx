@@ -4,6 +4,7 @@ import { Layout, Typography, Space, Button, Card } from 'antd'
 import { ColorModeButton } from './components/ui/color-mode.jsx'
 import { Toaster } from './components/ui/toaster.jsx'
 import { AuthShell } from './components/auth/auth-shell.jsx'
+import { RealtimeBridge } from './components/realtime-bridge.jsx'
 import { useAuth } from './lib/auth-context.jsx'
 import TimerPage from './pages/TimerPage.jsx'
 import TimelinePage from './pages/TimelinePage.jsx'
@@ -12,7 +13,7 @@ import { LuClock3, LuListTree, LuLogOut } from 'react-icons/lu'
 const { Header, Content } = Layout
 
 export default function App() {
-  const { isAuthenticated, user, logout } = useAuth()
+  const { isAuthenticated, user, logout, token } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -55,6 +56,7 @@ export default function App() {
 
   return (
     <>
+      <RealtimeBridge token={token} />
       <Layout style={{ minHeight: '100vh' }}>
         <Header
           style={{
@@ -64,6 +66,8 @@ export default function App() {
             top: 0,
             zIndex: 20,
             boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
+            backdropFilter: 'blur(6px)',
+            borderBottom: '1px solid var(--ant-color-border)',
           }}
         >
           <div
@@ -90,38 +94,48 @@ export default function App() {
                 minWidth: 240,
                 display: 'flex',
                 justifyContent: 'flex-end',
-                alignItems: 'center',
-                gap: 12,
-                flexWrap: 'wrap',
               }}
             >
-              {navLinks.map((link) => {
-                const isActive = location.pathname === link.to
-                return (
-                  <Button
-                    key={link.to}
-                    type={isActive ? 'primary' : 'default'}
-                    icon={link.icon}
-                    onClick={() => navigate(link.to)}
-                    shape='round'
-                  >
-                    {link.label}
-                  </Button>
-                )
-              })}
-              <Button
-                size='middle'
-                type='default'
-                icon={<LuLogOut size={16} />}
-                onClick={handleLogout}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '6px 8px',
+                  borderRadius: 999,
+                  background: 'var(--ant-color-bg-container)',
+                  boxShadow: '0 1px 2px rgba(15, 23, 42, 0.08)',
+                }}
               >
-                登出
-              </Button>
-              <ColorModeButton />
+                {navLinks.map((link) => {
+                  const isActive = location.pathname === link.to
+                  return (
+                    <Button
+                      key={link.to}
+                      type={isActive ? 'primary' : 'default'}
+                      icon={link.icon}
+                      onClick={() => navigate(link.to)}
+                      shape='round'
+                    >
+                      {link.label}
+                    </Button>
+                  )
+                })}
+                <Button
+                  size='middle'
+                  type='default'
+                  icon={<LuLogOut size={16} />}
+                  onClick={handleLogout}
+                  style={{ paddingInline: 16 }}
+                >
+                  登出
+                </Button>
+                <ColorModeButton />
+              </div>
             </div>
           </div>
         </Header>
-        <Content style={{ padding: '25px 24px 24px' }}>
+        <Content style={{ padding: '25px 24px 24px', marginTop: 16, background: 'var(--ant-color-bg-layout)' }}>
           <div
             style={{
               minHeight: '100%',

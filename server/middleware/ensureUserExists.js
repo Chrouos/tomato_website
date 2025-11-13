@@ -23,6 +23,7 @@ const ensureUserExists = async (req, res, next) => {
 
     return next();
   } catch (error) {
+    console.error('Failed to verify user existence', { userId, error });
     return res.status(500).json({ error: '驗證使用者失敗' });
   }
 };

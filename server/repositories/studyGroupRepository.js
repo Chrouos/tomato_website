@@ -1,8 +1,8 @@
 import crypto from 'crypto'
 import { prisma } from '../db.js'
 
-const MAX_MEMBERS_PER_GROUP = 20
-const ONLINE_THRESHOLD_MS = 2 * 60 * 1000
+export const MAX_MEMBERS_PER_GROUP = 20
+export const ONLINE_THRESHOLD_MS = 10 * 60 * 1000
 
 const mapGroup = (row) => {
   if (!row) return null
@@ -155,8 +155,9 @@ export const getStudyGroupDetail = async ({ userId, groupId }) => {
 
   const startOfDay = new Date()
   startOfDay.setHours(0, 0, 0, 0)
+  const localDateString = `${startOfDay.getFullYear()}-${String(startOfDay.getMonth() + 1).padStart(2, '0')}-${String(startOfDay.getDate()).padStart(2, '0')}`
 
-  const [sessionStats, todoStats] = memberIds.length
+  const [sessionStats, todoStats, dailyTaskCompletions, dailyTaskTotals, todoOutstanding] = memberIds.length
     ? await Promise.all([
         prisma.sessions.groupBy({
           by: ['user_id'],
@@ -175,14 +176,54 @@ export const getStudyGroupDetail = async ({ userId, groupId }) => {
           },
           _count: { _all: true },
         }),
+        prisma.daily_task_completions.findMany({
+          where: {
+            completed_on: new Date(localDateString),
+            daily_tasks: {
+              user_id: { in: memberIds },
+            },
+          },
+          include: {
+            daily_tasks: { select: { user_id: true } },
+          },
+        }),
+        prisma.daily_tasks.groupBy({
+          by: ['user_id'],
+          where: {
+            user_id: { in: memberIds },
+            archived: false,
+          },
+          _count: { _all: true },
+        }),
+        prisma.todos.groupBy({
+          by: ['user_id'],
+          where: {
+            user_id: { in: memberIds },
+            completed: false,
+            archived: false,
+          },
+          _count: { _all: true },
+        }),
       ])
-    : [[], []]
+    : [[], [], [], [], []]
 
   const sessionMap = new Map(
     sessionStats.map((item) => [item.user_id, item._sum?.duration_seconds ?? 0]),
   )
   const todoMap = new Map(
     todoStats.map((item) => [item.user_id, item._count?._all ?? 0]),
+  )
+  const dailyTaskCompletionMap = new Map()
+  dailyTaskCompletions.forEach((item) => {
+    const userId = item.daily_tasks?.user_id
+    if (!userId) return
+    dailyTaskCompletionMap.set(userId, (dailyTaskCompletionMap.get(userId) ?? 0) + 1)
+  })
+  const dailyTaskTotalsMap = new Map(
+    dailyTaskTotals.map((item) => [item.user_id, item._count?._all ?? 0]),
+  )
+  const todoOutstandingMap = new Map(
+    todoOutstanding.map((item) => [item.user_id, item._count?._all ?? 0]),
   )
 
   const now = Date.now()
@@ -195,6 +236,13 @@ export const getStudyGroupDetail = async ({ userId, groupId }) => {
       ...mapMembership(item),
       studySecondsToday: sessionMap.get(item.user_id) ?? 0,
       completedTodosToday: todoMap.get(item.user_id) ?? 0,
+      remainingTodos: todoOutstandingMap.get(item.user_id) ?? 0,
+      completedDailyTasksToday: dailyTaskCompletionMap.get(item.user_id) ?? 0,
+      totalDailyTasks: dailyTaskTotalsMap.get(item.user_id) ?? 0,
+      remainingDailyTasks: Math.max(
+        (dailyTaskTotalsMap.get(item.user_id) ?? 0) - (dailyTaskCompletionMap.get(item.user_id) ?? 0),
+        0,
+      ),
       online,
     }
   })

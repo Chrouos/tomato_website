@@ -33,6 +33,7 @@ import {
   completeTodo as completeTodoApi,
   reopenTodo as reopenTodoApi,
   archiveTodo as archiveTodoApi,
+  pingStudyGroupPresence,
 } from '../lib/api.js'
 import { toaster } from './ui/toaster.jsx'
 import { EncouragementModal } from './modals/encouragement-modal.jsx'
@@ -508,6 +509,36 @@ export function TomatoTimer() {
     todosFetchKeyRef.current = fetchKey
     refreshTodos()
   }, [isAuthenticated, token, refreshTodos])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isAuthenticated) {
+      return undefined
+    }
+    const handleDailyChange = () => {
+      refreshDailyTasks()
+    }
+    const handleTodoChange = () => {
+      refreshTodos()
+    }
+    window.addEventListener('tomato:daily-task-changed', handleDailyChange)
+    window.addEventListener('tomato:todo-changed', handleTodoChange)
+    return () => {
+      window.removeEventListener('tomato:daily-task-changed', handleDailyChange)
+      window.removeEventListener('tomato:todo-changed', handleTodoChange)
+    }
+  }, [isAuthenticated, refreshDailyTasks, refreshTodos])
+
+  useEffect(() => {
+    if (!isAuthenticated || !token || !isRunning) {
+      return undefined
+    }
+    const sendPing = () => {
+      pingStudyGroupPresence({ token }).catch(() => {})
+    }
+    sendPing()
+    const interval = setInterval(sendPing, 60_000)
+    return () => clearInterval(interval)
+  }, [isAuthenticated, token, isRunning])
 
   useEffect(() => {
     if (!isAuthenticated) {

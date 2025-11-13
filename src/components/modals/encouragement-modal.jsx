@@ -109,6 +109,20 @@ export function EncouragementModal({ token, open, onClose }) {
   }, [loadData, open])
 
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined
+    }
+    const handleRealtime = () => {
+      if (!open) return
+      loadData()
+    }
+    window.addEventListener('tomato:encouragement-updated', handleRealtime)
+    return () => {
+      window.removeEventListener('tomato:encouragement-updated', handleRealtime)
+    }
+  }, [open, loadData])
+
+  useEffect(() => {
     if (!token || !open || activeTab !== 'inbox') return
     const unreadIds = inbox.filter((item) => !item.readAt).map((item) => item.id)
     if (unreadIds.length === 0) return

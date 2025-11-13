@@ -9,10 +9,30 @@ import {
   updateStudyGroupPresence,
   leaveStudyGroup,
 } from '../repositories/studyGroupRepository.js'
+import { prisma } from '../db.js'
+import { broadcastStudyGroupPresence } from '../services/studyGroupPresence.js'
+import {
+  listGroupMessages,
+  createGroupMessage,
+} from '../repositories/studyGroupMessageRepository.js'
+import { publishToUsers } from '../lib/sseHub.js'
 
 const router = Router()
 
 router.use(authenticate, ensureUserExists)
+
+router.post('/presence/ping', async (req, res) => {
+  await prisma.study_group_members.updateMany({
+    where: { user_id: req.user.id },
+    data: { last_seen_at: new Date() },
+  })
+
+  res.json({ ok: true })
+
+  broadcastStudyGroupPresence({ userId: req.user.id }).catch((error) => {
+    console.error('Failed to broadcast study group presence', error)
+  })
+})
 
 router.get('/', async (req, res) => {
   const items = await listStudyGroups({ userId: req.user.id })
@@ -74,6 +94,51 @@ router.post('/:groupId/ping', async (req, res) => {
   }
 
   res.json({ ok: true })
+})
+
+router.get('/:groupId/messages', async (req, res) => {
+  try {
+    const messages = await listGroupMessages({
+      userId: req.user.id,
+      groupId: req.params.groupId,
+      limit: Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 200),
+    })
+    res.json({ items: messages })
+  } catch (error) {
+    res.status(400).json({ error: error.message ?? '載入群組訊息失敗' })
+  }
+})
+
+router.post('/:groupId/messages', async (req, res) => {
+  try {
+    const message = await createGroupMessage({
+      userId: req.user.id,
+      groupId: req.params.groupId,
+      content: req.body?.content,
+    })
+
+    res.status(201).json({ message })
+
+    const recipients = await prisma.study_group_members.findMany({
+      where: { group_id: req.params.groupId },
+      select: { user_id: true },
+    })
+
+    publishToUsers(
+      recipients.map((item) => item.user_id),
+      'study-group:message',
+      {
+        groupId: req.params.groupId,
+        message,
+      },
+    )
+
+    broadcastStudyGroupPresence({ userId: req.user.id }).catch((error) => {
+      console.error('Failed to broadcast study group presence', error)
+    })
+  } catch (error) {
+    res.status(400).json({ error: error.message ?? '送出訊息失敗' })
+  }
 })
 
 router.delete('/:groupId', async (req, res) => {

@@ -8,6 +8,7 @@ import {
   setTodoCompletion,
   archiveTodo,
 } from '../repositories/todoRepository.js';
+import { publishToUser } from '../lib/sseHub.js';
 
 const router = Router();
 
@@ -100,6 +101,10 @@ router.post('/', async (req, res) => {
   });
 
   res.status(201).json(todo);
+  publishToUser(req.user.id, 'todo:changed', {
+    action: 'create',
+    todo,
+  });
 });
 
 /**
@@ -157,6 +162,10 @@ router.patch('/:id', async (req, res) => {
   }
 
   res.json(todo);
+  publishToUser(req.user.id, 'todo:changed', {
+    action: 'update',
+    todo,
+  });
 });
 
 /**
@@ -195,6 +204,10 @@ router.post('/:id/complete', async (req, res) => {
   }
 
   res.json(todo);
+  publishToUser(req.user.id, 'todo:changed', {
+    action: 'complete',
+    todo,
+  });
 });
 
 /**
@@ -233,6 +246,10 @@ router.delete('/:id/complete', async (req, res) => {
   }
 
   res.json(todo);
+  publishToUser(req.user.id, 'todo:changed', {
+    action: 'reopen',
+    todo,
+  });
 });
 
 /**
@@ -270,6 +287,10 @@ router.delete('/:id', async (req, res) => {
   }
 
   res.json(todo);
+  publishToUser(req.user.id, 'todo:changed', {
+    action: 'archive',
+    todoId: req.params.id,
+  });
 });
 
 export default router;

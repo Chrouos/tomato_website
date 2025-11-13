@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
+export const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
 
 const defaultHeaders = {
   'Content-Type': 'application/json',
@@ -232,6 +232,29 @@ export const pingStudyGroup = ({ token, groupId }) =>
     token,
   });
 
+export const pingStudyGroupPresence = ({ token }) =>
+  apiRequest('/study-groups/presence/ping', {
+    method: 'POST',
+    token,
+  });
+
+export const fetchStudyGroupMessages = ({ token, groupId, limit }) => {
+  const searchParams = new URLSearchParams()
+  if (limit) searchParams.set('limit', String(limit))
+  const query = searchParams.toString()
+  return apiRequest(`/study-groups/${encodeURIComponent(groupId)}/messages${query ? `?${query}` : ''}`, {
+    method: 'GET',
+    token,
+  })
+}
+
+export const createStudyGroupMessage = ({ token, groupId, content }) =>
+  apiRequest(`/study-groups/${encodeURIComponent(groupId)}/messages`, {
+    method: 'POST',
+    token,
+    body: { content },
+  })
+
 export const leaveStudyGroup = ({ token, groupId }) =>
   apiRequest(`/study-groups/${encodeURIComponent(groupId)}`, {
     method: 'DELETE',
@@ -311,6 +334,9 @@ export default {
   joinStudyGroup,
   fetchStudyGroupDetail,
   pingStudyGroup,
+  pingStudyGroupPresence,
+  fetchStudyGroupMessages,
+  createStudyGroupMessage,
   leaveStudyGroup,
   fetchEncouragementSummary,
   fetchEncouragementInbox,
